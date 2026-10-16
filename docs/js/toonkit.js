@@ -176,6 +176,13 @@ export function buildFace(head, R, cfg) {
   open.add(tongue);
   tongue.scale.divide(open.scale); // keep tongue in head units even though parent is scaled
   tongue.position.divide(open.scale);
+  if (mo.teeth) {
+    // upper teeth: a white band along the top of the open mouth
+    const teeth = part(sphere(1), flat(0xfbf7f2), { pos: [0, mo.w * 0.42 * R, mo.w * 0.14 * R], scale: [mo.w * 0.82 * R, mo.w * 0.26 * R, mo.w * 0.16 * R] });
+    open.add(teeth);
+    teeth.scale.divide(open.scale);
+    teeth.position.divide(open.scale);
+  }
   const smile = part(torus(mo.w * 0.85 * R, mo.w * 0.13 * R, Math.PI), flat(INK), { rot: [0, 0, Math.PI] });
   mouth.add(open, smile);
   faceOutward(mouth, onSurface(R, 0, mo.y * R, 0.01));
@@ -197,7 +204,7 @@ export function buildFace(head, R, cfg) {
 // Mood → brow tilt (radians, inner end), brow lift (×R), mouth curve (+1 smile, -1 frown)
 const MOODS = {
   neutral:   { tilt: 0,     lift: 0,    curve: 1,  eye: 1 },
-  happy:     { tilt: 0.15,  lift: 0.03, curve: 1,  eye: 0.85 },
+  happy:     { tilt: -0.06, lift: 0.05, curve: 1,  eye: 0.82 },
   sad:       { tilt: 0.38,  lift: 0.01, curve: -1, eye: 0.9 },
   angry:     { tilt: -0.42, lift: -0.03, curve: -1, eye: 0.9 },
   surprised: { tilt: 0.05,  lift: 0.09, curve: 0,  eye: 1.15 },
@@ -211,8 +218,9 @@ export class Rig {
   // root: whole character. head: the part that turns to look at you. face: from buildFace.
   // opts.restLid: 0 = wide awake, 0.4 = sleepy/half-lidded. opts.setMouth: custom mouth (e.g. a beak).
   // opts.tick(t, dt, rig): character-specific motion (tail, wings, wobble...).
-  constructor({ root, head, face, restLid = 0, setMouth, tick, height = 2.4 }) {
-    Object.assign(this, { root, head, face, restLid, customMouth: setMouth, customTick: tick, height });
+  // opts.restMouth: how open the mouth stays when idle and smiling (0 = closed smile, 0.3 = grin).
+  constructor({ root, head, face, restLid = 0, restMouth = 0, setMouth, tick, height = 2.4 }) {
+    Object.assign(this, { root, head, face, restLid, restMouth, customMouth: setMouth, customTick: tick, height });
     this.mood = 'neutral';
     this.m = { ...MOODS.neutral };
     this.mouthOpen = 0;
@@ -259,7 +267,8 @@ export class Rig {
     if (this.customMouth) this.customMouth(v, this);
     const mo = this.face.mouth;
     const surprisedO = this.mood === 'surprised' ? 0.45 : 0;
-    const open = Math.max(v, surprisedO);
+    const grin = this.m.curve > 0.3 ? this.restMouth : 0;
+    const open = Math.max(v, surprisedO, grin);
     mo.open.visible = open > 0.04;
     mo.open.scale.y = mo.base * 0.8 * R * Math.max(open, 0.05);
     mo.open.scale.x = mo.base * R * (0.75 + 0.35 * (1 - open * 0.5));
