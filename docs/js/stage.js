@@ -55,7 +55,8 @@ export class Stage {
     // a paper "coaster" with an ink rim, to match the notebook look
     this.platformTop = toon(0xfbf6ec, { rough: 0.85, sheen: 0.2 });
     this.platform.add(part(cyl(1.12, 1.14, 0.1, 96), this.platformTop, { pos: [0, -0.05, 0] }));
-    this.platform.add(part(cyl(1.18, 1.18, 0.12, 96), toon(0x000000, { rough: 0.6 }), { pos: [0, -0.07, 0] }));
+    this.platformRim = toon(0x000000, { rough: 0.6 });
+    this.platform.add(part(cyl(1.18, 1.18, 0.12, 96), this.platformRim, { pos: [0, -0.07, 0] }));
     this.platform.children.forEach((m) => { m.castShadow = false; m.receiveShadow = true; });
     this.scene.add(this.platform);
 
@@ -92,8 +93,9 @@ export class Stage {
     this.camera.updateProjectionMatrix();
   }
 
-  setTheme(color) {
-    this.platformTop.color.set(0xfbf6ec).lerp(new THREE.Color(color), 0.18);
+  setTheme(color, dark = false) {
+    this.platformTop.color.set(dark ? 0x2a2a2e : 0xfbf6ec).lerp(new THREE.Color(color), dark ? 0.25 : 0.18);
+    this.platformRim.color.set(dark ? 0xd9d3c7 : 0x000000);
     this.rim.color.set(color).lerp(new THREE.Color(0xffffff), 0.45);
   }
 

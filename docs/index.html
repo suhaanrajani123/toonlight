@@ -10,6 +10,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+  <script>
+    // pick the theme before the page paints (saved choice, else the system setting)
+    try {
+      const t = localStorage.getItem('toonlight:theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.dataset.theme = t;
+    } catch { document.documentElement.dataset.theme = 'light'; }
+  </script>
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
     {
@@ -34,6 +41,10 @@
       <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
       <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></symbol>
       <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h4L13 5v14l-5-4.5H4z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5.5h16v10H10l-4.5 3.5v-3.5H4z"/></symbol>
       <symbol id="i-muted" viewBox="0 0 24 24"><path d="M4 9.5h4L13 5v14l-5-4.5H4z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></symbol>
     </defs>
   </svg>
@@ -51,6 +62,10 @@
       <button type="button" class="menu-item" data-go="help">Help</button>
     </nav>
     <div class="menu-right">
+      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch to black theme" title="Black theme">
+        <svg class="ico ico-moon"><use href="#i-moon"/></svg>
+        <svg class="ico ico-sun"><use href="#i-sun"/></svg>
+      </button>
       <button type="button" class="icon-btn" id="voice-toggle" aria-pressed="true" aria-label="Voice on" title="Voice on">
         <svg class="ico"><use href="#i-sound"/></svg>
       </button>
@@ -108,8 +123,18 @@
         <!-- chat -->
         <section class="chat" aria-label="Conversation">
           <header class="chat-head">
-            <h2 id="chat-title">Chat</h2>
-            <p class="hand chat-mode" id="chat-mode">Just chat</p>
+            <div class="chat-head-text">
+              <h2 id="chat-title">Chat</h2>
+              <p class="hand chat-mode" id="chat-mode">Just chat</p>
+            </div>
+            <div class="seg" role="group" aria-label="How should they reply?">
+              <button type="button" id="mode-text" aria-pressed="true" title="Replies are text only. Press Listen on any reply to hear it.">
+                <svg class="ico"><use href="#i-chat"/></svg>Chat only
+              </button>
+              <button type="button" id="mode-voice" aria-pressed="false" title="Characters read every reply out loud">
+                <svg class="ico"><use href="#i-sound"/></svg>Voice
+              </button>
+            </div>
           </header>
           <p class="notice" id="notice" hidden></p>
           <ol class="messages" id="messages" aria-live="polite"></ol>

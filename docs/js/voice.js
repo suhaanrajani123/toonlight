@@ -78,17 +78,12 @@ export class Voice {
 
   // lang: BCP-47 code. English uses the character's own voice (HD or standard);
   // other languages (language-practice mode) use a browser voice for that language.
-  async speak(text, profile, lang = 'en-US') {
+  // force: speak even in chat-only mode (the Listen button on a reply)
+  async speak(text, profile, lang = 'en-US', { force = false } = {}) {
     this.stop();
     if (!text) return;
     const token = this.token;
-    if (!this.enabled) {
-      // sound off: just move the mouth for about as long as the reply would take to say
-      const ms = Math.min(12000, text.split(/\s+/).length * 260);
-      this.silentUntil = performance.now() + ms;
-      await new Promise((r) => setTimeout(r, ms));
-      return;
-    }
+    if (!this.enabled && !force) return; // chat-only mode: stay quiet
     const parts = splitSentences(text);
     const english = /^en/i.test(lang);
     if (this.hd && this.hdReady && english) {

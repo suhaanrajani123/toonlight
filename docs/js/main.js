@@ -109,7 +109,7 @@ async function select(id) {
   current = c;
 
   document.documentElement.style.setProperty('--tint', c.theme.tint);
-  stage.setTheme(c.theme.tint);
+  stage.setTheme(c.theme.tint, document.documentElement.dataset.theme === 'dark');
   els.name.textContent = c.name;
   els.kind.textContent = `${c.kind} character`;
   els.tagline.textContent = c.tagline;
@@ -250,6 +250,16 @@ function bubble(role, text, { sources = [], who, fresh, memo } = {}) {
   p.textContent = text; // textContent: replies can never inject HTML
   b.append(p);
   li.append(b);
+  if (role === 'assistant' && text) {
+    const l = document.createElement('button');
+    l.type = 'button';
+    l.className = 'listen';
+    l.setAttribute('aria-pressed', 'false');
+    l.setAttribute('aria-label', 'Listen to this reply');
+    l.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-play"/></svg><span>Listen</span>';
+    l.addEventListener('click', () => listen(l, text));
+    li.append(l);
+  }
   for (const f of memo || []) {
     const n = document.createElement('p');
     n.className = 'memo';
@@ -490,18 +500,50 @@ els.stage.addEventListener('drop', (e) => {
 });
 
 // voice
-function setVoiceUI() {
-  els.voiceToggle.setAttribute('aria-pressed', String(voice.enabled));
-  els.voiceToggle.setAttribute('aria-label', voice.enabled ? 'Voice on' : 'Voice off');
-  els.voiceToggle.title = voice.enabled ? 'Voice on' : 'Voice off';
-  els.voiceToggle.querySelector('use').setAttribute('href', voice.enabled ? '#i-sound' : '#i-muted');
+// Chat only (quiet, press Listen on a reply to hear it) vs Voice (every reply read aloud)
+function setSpeak(on, { save = true } = {}) {
+  voice.enabled = on;
+  if (!on) voice.stop();
+  if (save) write('toonlight:speak', on ? 'on' : 'off');
+  $('mode-voice').setAttribute('aria-pressed', String(on));
+  $('mode-text').setAttribute('aria-pressed', String(!on));
+  els.voiceToggle.setAttribute('aria-pressed', String(on));
+  els.voiceToggle.setAttribute('aria-label', on ? 'Voice replies on' : 'Chat only (voice off)');
+  els.voiceToggle.title = on ? 'Voice replies on' : 'Chat only';
+  els.voiceToggle.querySelector('use').setAttribute('href', on ? '#i-sound' : '#i-muted');
 }
-els.voiceToggle.addEventListener('click', () => {
-  voice.enabled = !voice.enabled;
-  if (!voice.enabled) voice.stop();
-  write('toonlight:voice', voice.enabled ? 'on' : 'off');
-  setVoiceUI();
-});
+els.voiceToggle.addEventListener('click', () => setSpeak(!voice.enabled));
+$('mode-voice').addEventListener('click', () => { unlockAudio(); setSpeak(true); });
+$('mode-text').addEventListener('click', () => setSpeak(false));
+
+// Listen button on a reply: plays just that reply, even in chat-only mode
+let playing = null;
+async function listen(btn, text) {
+  if (playing === btn) { voice.stop(); return; }
+  if (playing) playing.setAttribute('aria-pressed', 'false');
+  playing = btn;
+  btn.setAttribute('aria-pressed', 'true');
+  btn.lastChild.textContent = 'Stop';
+  unlockAudio();
+  const { say, lang } = spokenPart(text);
+  try { await voice.speak(say, current.voice, lang, { force: true }); } finally {
+    btn.setAttribute('aria-pressed', 'false');
+    btn.lastChild.textContent = 'Listen';
+    if (playing === btn) playing = null;
+  }
+}
+
+// Light / black theme
+function setTheme(theme, { save = true } = {}) {
+  document.documentElement.dataset.theme = theme;
+  if (save) write('toonlight:theme', theme);
+  const dark = theme === 'dark';
+  $('theme-toggle').setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to black theme');
+  $('theme-toggle').title = dark ? 'Light theme' : 'Black theme';
+  document.querySelector('meta[name="theme-color"]').content = dark ? '#0F0F11' : '#E9DFCC';
+  if (current) stage.setTheme(current.theme.tint, dark);
+}
+$('theme-toggle').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
 // Natural voices: on by default on computers. The model (~90 MB, downloaded once, then cached)
 // loads quietly in the background; until it's ready, the browser's own voice is used.
 async function setNatural(on, { auto } = {}) {
@@ -568,15 +610,15 @@ tick();
 setInterval(tick, 20000);
 
 // browsers only allow sound after the first click or key press
-const unlockAudio = () => { try { voice.audioContext().resume(); } catch {} };
+function unlockAudio() { try { voice.audioContext().resume(); } catch {} }
 addEventListener('pointerdown', unlockAudio, { once: true });
 addEventListener('keydown', unlockAudio, { once: true });
 
 // ---------- start ----------
 
 if (isDemo()) notice('Demo mode: the AI server isn’t connected, so characters can’t really answer yet.');
-voice.enabled = read('toonlight:voice', 'on') !== 'off';
-setVoiceUI();
+setSpeak(read('toonlight:speak', 'off') === 'on', { save: false });   // default: chat only
+setTheme(document.documentElement.dataset.theme || 'light', { save: false });
 {
   // default: on for computers, off for phones/data saver (the download is ~90 MB)
   const pref = read('toonlight:hd', 'auto');
