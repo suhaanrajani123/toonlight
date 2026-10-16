@@ -106,7 +106,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; letter-spacing: -0.0
   box-shadow: var(--shadow-big); overflow: hidden;
   animation: window-in 0.55s cubic-bezier(.2,.9,.3,1.2) both;
 }
-@keyframes window-in { from { transform: translateY(18px) rotate(-0.6deg); opacity: 0; } }
+@keyframes window-in { from { transform: translateY(18px) rotate(-0.6deg); } }
 .titlebar {
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 54px; padding: 0 14px 0 18px; flex: none;
   background: var(--grain), var(--cream); border-bottom: var(--line-bold) solid var(--ink);
@@ -238,7 +238,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; letter-spacing: -0.0
 .msg.system { align-self: center; max-width: 96%; text-align: center; }
 .msg.system p { font-family: var(--hand); font-size: 1.15rem; line-height: 1.2; color: var(--ink-soft); }
 .msg.new .bubble { animation: pop-in 0.28s cubic-bezier(.2,.9,.3,1.3); }
-@keyframes pop-in { from { transform: translateY(6px) scale(0.97); opacity: 0; } }
+@keyframes pop-in { from { transform: translateY(6px) scale(0.97); } }
 .typing .bubble { display: flex; gap: 5px; width: fit-content; padding: 14px 16px !important; }
 .memo { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0; font-family: var(--hand); font-weight: 700; font-size: 1.05rem; color: var(--ink-soft); }
 .memo::before { content: ''; width: 14px; height: 14px; border: 2px solid var(--ink); border-radius: 3px; background: var(--tint); transform: rotate(-8deg); }
