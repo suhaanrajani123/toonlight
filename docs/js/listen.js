@@ -31,6 +31,8 @@ export class Listener {
     };
   }
 
+  setLang(code) { if (this.rec) this.rec.lang = code; }
+
   toggle() {
     if (!this.supported) return;
     if (this.listening) this.rec.stop();

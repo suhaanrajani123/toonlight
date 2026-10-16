@@ -1,15 +1,24 @@
 # Toonlight
 
-Talk to six original 3D characters, 3 anime and 3 cartoon, in your browser. Each one has its own personality, voice, moods and lip-sync, and can look things up on the web for current information. Total cost: **$0**.
+**Practice anything with a 3D character coach.** Pick one of six original characters, then choose what to practice. Everything runs in your browser, and the total cost is **$0**.
+
+| Mode | What happens |
+|---|---|
+| **Quiz me** | Exam practice on any topic: one question at a time, graded, with a running score |
+| **Mock interview** | A realistic interviewer for the role you choose; every answer gets a rating out of 10 and a tip |
+| **Language practice** | Chat in Spanish, French, Japanese, Hindi and more. They reply simply, correct your mistakes and speak in that language |
+| **Just chat** | Advice, explanations, recipes, ideas |
+
+The characters also **remember you**: your name, your goals, and facts you share. They're saved in the **Notebook** (top right), only in your browser, and you can edit or delete anything there.
 
 | Character | Style | Good at |
 |---|---|---|
-| Seraphine Valcrest, the regal strategist | Anime | advice, history, planning |
-| Kaito Hayabusa, the hyper underdog | Anime | motivation, sports, fitness |
-| Yuzu Amano, the shy genius | Anime | science, math, coding |
-| Professor Pip, the grumpy inventor owl | Cartoon | how things work, trivia |
-| Bloop, the jelly blob | Cartoon | jokes, puns, fun facts |
-| Marlowe, the detective cat | Cartoon | news and current events |
+| Kaito Hayabusa, cheerful adventurer | Anime | motivation, fitness, travel, big goals |
+| Raven Ashford, night-market rogue | Anime | straight answers, news, street smarts |
+| Jun Arata, arcade tech kid | Anime | coding, gadgets, games |
+| Elara Quinn, calm city girl | Anime | life advice, studying, food and recipes |
+| Fennick, fox explorer | Cartoon | geography, history, nature, trivia |
+| Stella Nova, star-powered hype girl | Cartoon | jokes, fun facts, music, creative ideas |
 
 ## How it works
 
@@ -42,31 +51,17 @@ python -m http.server 8000 --directory docs   # needs Python
 
 Then open the address it prints. The site starts in **demo mode**, where characters give pre-written replies. Do steps 1 to 3 below to turn on real AI.
 
-## Turn on the real AI
+## Turn on the real AI (no API key needed)
 
-### 1. Get a free Gemini API key
-1. Go to <https://aistudio.google.com/apikey> and sign in with a Google account.
-2. Click **Create API key** and copy it. **Never put this key in the website code or on GitHub.**
+The AI runs on a free **Cloudflare Worker** using Cloudflare's built-in models (Workers AI). This one is already set up at `https://toonlight.suhaanrajani276.workers.dev`. To set up your own from scratch:
 
-### 2. Create the free AI server (Cloudflare Worker)
-1. Make a free account at <https://dash.cloudflare.com/sign-up>.
-2. Go to **Compute (Workers)**, then **Workers & Pages**, then **Create**. Choose **Start with Hello World**, name it `toonlight`, and click **Deploy**.
-3. Click **Edit code**, delete everything there, paste the whole of `worker/worker.js`, and click **Deploy**.
-4. Go to the worker's **Settings**, then **Variables and Secrets**, then **Add**:
-   - Type **Secret**, name `GEMINI_API_KEY`, value = your key. Save.
-5. Copy your worker's address. It looks like `https://toonlight.YOUR-NAME.workers.dev`.
-6. Test it: open that address in your browser. You should see `{"ok":true,...}`.
+1. Make a free account at dash.cloudflare.com.
+2. Go to **Workers & Pages → Create → Start with Hello World**, name it `toonlight`, and click **Deploy**.
+3. Open the worker's **Settings → Bindings → Add binding → Workers AI**, set the variable name to `AI`, and click **Add Binding**.
+4. Click **Edit code**, replace everything with `worker/worker.js`, and click **Deploy**.
+5. Put the worker's address plus `/chat` in `docs/js/config.js` (`API_URL`).
 
-*(Command-line alternative: `cd worker`, `npx wrangler login`, `npx wrangler secret put GEMINI_API_KEY`, `npx wrangler deploy`.)*
-
-### 3. Connect the website to the server
-Open `docs/js/config.js` and set:
-
-```js
-API_URL: 'https://toonlight.YOUR-NAME.workers.dev/chat',
-```
-
-Reload the page. The demo-mode notice disappears and the characters now really answer.
+**Optional, for smarter answers with live Google Search:** add a secret named `GEMINI_API_KEY` from aistudio.google.com/apikey. The worker then uses Gemini first and falls back to Workers AI.
 
 ## Put it online for free (GitHub Pages)
 
@@ -77,9 +72,9 @@ Reload the page. The demo-mode notice disappears and the characters now really a
 
 ## Free-tier limits, honestly
 
-- Gemini's free tier has daily request limits, and Google Search grounding has its own smaller cap. When search runs out, the worker automatically answers without search instead of failing. When everything runs out, visitors see "Too many messages right now". Check current limits in AI Studio.
-- Free-tier Gemini requests may be used by Google to improve their products. Don't type anything private.
-- Gemini's free tier isn't available to serve users in the EU, UK or Switzerland.
+- Workers AI's free plan includes 10,000 "neurons" a day (roughly a few hundred short chats). It resets at midnight UTC. When it's used up, characters say so until the reset.
+- Workers AI has no live web search, so very recent news may be out of date (adding the optional Gemini key fixes this).
+- Don't type anything private: messages go to the AI provider to be answered.
 - The worker allows 20 messages per minute per visitor, to slow down abuse.
 
 ## Customize
@@ -88,20 +83,15 @@ Reload the page. The demo-mode notice disappears and the characters now really a
 - **Change a voice:** edit `voice` in `docs/js/roster.js`. Standard voices take `pitch` (0–2) and `rate`. HD voices take a Kokoro voice name, such as `af_heart`, `af_bella`, `af_nicole`, `af_sky`, `am_adam`, `am_puck`, `am_fenrir`, `bf_emma`, `bm_george` or `bm_lewis`, plus `speed` and `pitch`.
 - **Change a character's look:** each one is a single file in `docs/js/characters/`. Open `docs/dev/preview.html?c=bloop&mood=happy` to preview one character on its own (try moods `happy`, `sad`, `angry`, `surprised` and `thinking`).
 
-## Use your own 3D models
+## Use your own 3D models (recommended)
 
-The built-in characters are placeholders made from simple shapes. For a professional look, swap in real models. The site supports **.vrm** (VRoid Studio) and **.glb / .gltf** files.
+The built-in characters are built from simple shapes. For a polished, professional look, make each one in **VRoid Studio**:
 
-**Try one instantly:** drag a `.vrm` or `.glb` file onto the stage. It replaces the current character until you reload the page.
-
-**Make it permanent:**
-1. Put the file in `docs/models/`, for example `docs/models/seraphine.vrm`.
-2. In `docs/js/roster.js`, add a `model` line to that character:
-   ```js
-   id: 'seraphine', name: 'Seraphine Valcrest', ...
-   model: 'models/seraphine.vrm',
-   ```
-3. Reload. If the file can't load, the built-in character appears instead, and the browser console says why.
+1. Download **VRoid Studio** (free) from vroid.com/en/studio and open it.
+2. Click **Create New**, pick a female or male base, and design the character: face, eyes, hair (there are presets you can tweak), body and outfit. Use the reference picture of the character next to you. Plan on about an hour per character.
+3. Click **Camera/Exporter** (top right), then **Export as VRM**. Choose VRM 1.0, set a title, and save the `.vrm` file.
+4. On the site, select that character, open the **Notebook**, then **Use your own 3D model → Choose a model file**. You can also just drag the file onto the stage. It's saved in your browser and loads every visit.
+5. **To show it to everyone who visits:** put the file in `docs/models/`, add `model: 'models/kaito.vrm'` to that character in `docs/js/roster.js`, and push to GitHub. Keep files under about 20 MB (VRoid's export has a texture size option).
 
 **What gets animated automatically:**
 

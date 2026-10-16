@@ -52,9 +52,10 @@ export class Stage {
 
     // the round platform
     this.platform = new THREE.Group();
-    this.platformTop = gloss(0xffffff, { rough: 0.25, clearcoat: 0.6 });
-    this.platform.add(part(cyl(1.15, 1.22, 0.14, 96), this.platformTop, { pos: [0, -0.07, 0], ol: 0.015 }));
-    this.platform.add(part(cyl(1.24, 1.26, 0.05, 96), toon(0x2a2140, { rough: 0.3, metal: 0.6 }), { pos: [0, -0.165, 0] }));
+    // a paper "coaster" with an ink rim, to match the notebook look
+    this.platformTop = toon(0xfbf6ec, { rough: 0.85, sheen: 0.2 });
+    this.platform.add(part(cyl(1.12, 1.14, 0.1, 96), this.platformTop, { pos: [0, -0.05, 0] }));
+    this.platform.add(part(cyl(1.18, 1.18, 0.12, 96), toon(0x000000, { rough: 0.6 }), { pos: [0, -0.07, 0] }));
     this.platform.children.forEach((m) => { m.castShadow = false; m.receiveShadow = true; });
     this.scene.add(this.platform);
 
@@ -82,17 +83,18 @@ export class Stage {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     // small or narrow stages: step back and aim lower, so the character sits above the cast bar
-    const compact = h < 600 || this.camera.aspect < 0.8;
-    const dist = compact ? 6.6 * Math.max(1.3, 1.05 / this.camera.aspect) : 6.6;
-    this.target.y = compact ? 0.82 : 1.12;
+    // narrow stages (phones): step back so the whole body fits the width
+    const narrow = this.camera.aspect < 1.05;
+    const dist = narrow ? 6.9 / Math.max(this.camera.aspect, 0.6) : 6.6;
+    this.target.y = narrow ? 1.05 : 1.12;
     this.camera.position.set(0, 1.45, dist);
     this.camera.lookAt(this.target);
     this.camera.updateProjectionMatrix();
   }
 
   setTheme(color) {
-    this.platformTop.color.set(color).lerp(new THREE.Color(0xffffff), 0.7);
-    this.rim.color.set(color).lerp(new THREE.Color(0xffffff), 0.3);
+    this.platformTop.color.set(0xfbf6ec).lerp(new THREE.Color(color), 0.18);
+    this.rim.color.set(color).lerp(new THREE.Color(0xffffff), 0.45);
   }
 
   show(rig) {

@@ -15,7 +15,7 @@ const MALE = /\bmale\b|david|mark|daniel|alex|fred|george|ryan|guy|christopher|e
 // Split a reply into short sentences: browsers cut off long utterances, and HD speech
 // can start playing the first sentence while the next one is still being generated.
 export function splitSentences(text) {
-  const raw = text.replace(/\s+/g, ' ').match(/[^.!?…]+[.!?…]*["')\]]*\s*/g) || [text];
+  const raw = text.replace(/\s+/g, ' ').match(/[^.!?…。！？]+[.!?…。！？]*["')\]」]*\s*/g) || [text];
   const out = [];
   for (let s of raw) {
     s = s.trim();
@@ -40,7 +40,7 @@ export class Voice {
     this.synth = window.speechSynthesis || null;
     this.voices = [];
     if (this.synth) {
-      const load = () => (this.voices = this.synth.getVoices().filter((v) => /^en/i.test(v.lang)));
+      const load = () => (this.voices = this.synth.getVoices());
       load();
       this.synth.addEventListener?.('voiceschanged', load);
     }
@@ -75,7 +75,9 @@ export class Voice {
     this.silentUntil = 0;
   }
 
-  async speak(text, profile) {
+  // lang: BCP-47 code. English uses the character's own voice (HD or standard);
+  // other languages (language-practice mode) use a browser voice for that language.
+  async speak(text, profile, lang = 'en-US') {
     this.stop();
     if (!text) return;
     const token = this.token;
@@ -87,7 +89,8 @@ export class Voice {
       return;
     }
     const parts = splitSentences(text);
-    if (this.hd) {
+    const english = /^en/i.test(lang);
+    if (this.hd && english) {
       try {
         await this.speakHD(parts, profile.hd, token);
         return;
@@ -96,30 +99,40 @@ export class Voice {
         this.onStatus('HD voice could not load, so the standard voice is used instead.');
       }
     }
-    if (token === this.token) await this.speakWeb(parts, profile.web, token);
+    if (token === this.token) await this.speakWeb(parts, profile.web, token, lang);
   }
 
   // ---------- standard voices ----------
 
-  pickVoice(prof) {
-    if (!this.voices.length && this.synth) this.voices = this.synth.getVoices().filter((v) => /^en/i.test(v.lang));
+  pickVoice(prof, lang = 'en-US') {
+    if (!this.voices.length && this.synth) this.voices = this.synth.getVoices();
+    const base = lang.slice(0, 2).toLowerCase();
+    const pool = this.voices.filter((v) => v.lang.toLowerCase().startsWith(base));
+    if (base !== 'en') {
+      // prefer the exact region, then natural/online voices
+      const s = (v) => (v.lang.toLowerCase() === lang.toLowerCase()) * 2 + /natural|neural|online|google/i.test(v.name);
+      return pool.sort((a, b) => s(b) - s(a))[0] || null;
+    }
     const score = (v) =>
       (prof.gender === 'female' ? FEMALE.test(v.name) : MALE.test(v.name)) * 4 +
       /natural|neural|online|google/i.test(v.name) * 2 +
       /en-(us|gb)/i.test(v.lang) * 1;
-    return [...this.voices].sort((a, b) => score(b) - score(a))[0] || null;
+    return [...pool].sort((a, b) => score(b) - score(a))[0] || null;
   }
 
-  async speakWeb(parts, prof, token) {
+  async speakWeb(parts, prof, token, lang = 'en-US') {
     if (!this.synth) return;
-    const voice = this.pickVoice(prof);
+    const english = /^en/i.test(lang);
+    const voice = this.pickVoice(prof, lang);
     for (const text of parts) {
       if (token !== this.token) return;
       await new Promise((resolve) => {
         const u = new SpeechSynthesisUtterance(text);
         if (voice) u.voice = voice;
-        u.pitch = prof.pitch;
-        u.rate = prof.rate;
+        u.lang = voice?.lang || lang;
+        // character pitch only for English; other languages sound better natural and a bit slower
+        u.pitch = english ? prof.pitch : 1;
+        u.rate = english ? prof.rate : 0.9;
         let timer;
         const done = () => { clearTimeout(timer); this.webActive = false; resolve(); };
         u.onstart = () => { this.webActive = true; this.lastBoundary = performance.now(); };

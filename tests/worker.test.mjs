@@ -110,4 +110,21 @@ assert.equal(res.status, 200, 'Gemini down → Workers AI answers');
 mode = 'ok';
 res = await worker.fetch(req(good), { ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
 assert.equal(res.status, 500, 'no AI configured');
-console.log('ok  workers AI\nall worker tests passed');
+console.log('ok  workers AI');
+
+// 8. practice modes + memory reach the system prompt; bad values are rejected
+aiCalls.length = 0;
+res = await worker.fetch(req({ ...good, mode: 'quiz', topic: 'data structures', memory: { name: 'Suhaan', goals: 'Ace CS114', facts: ['Studies at NJIT'] } }), { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
+assert.equal(res.status, 200);
+const sys = aiCalls[0].input.messages[0].content;
+assert.match(sys, /QUIZ ME.*data structures/s);
+assert.match(sys, /Their name: Suhaan/);
+assert.match(sys, /Studies at NJIT/);
+assert.match(sys, /\[remember:/);
+res = await worker.fetch(req({ ...good, mode: 'language', lang: 'Japanese' }), { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
+assert.match(aiCalls.at(-1).input.messages[0].content, /LANGUAGE PRACTICE in Japanese/);
+for (const bad of [{ mode: 'hack' }, { lang: 'Klingon' }, { topic: 'x'.repeat(200) }, { memory: { facts: ['x'.repeat(300)] } }, { memory: 'nope' }]) {
+  res = await worker.fetch(req({ ...good, ...bad }), { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
+  assert.equal(res.status, 400, JSON.stringify(bad).slice(0, 40));
+}
+console.log('ok  modes + memory\nall worker tests passed');

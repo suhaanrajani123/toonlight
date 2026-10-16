@@ -6,7 +6,12 @@ globalThis.fetch = async (url, init) => {
   const body = JSON.parse(init.body);
   const last = body.contents.at(-1).parts[0].text;
   const who = body.systemInstruction.parts[0].text.match(/You are ([A-Z][\w ]+?)[,.]/)[1];
-  return Response.json({ candidates: [{ content: { parts: [{ text: `[surprised] **${who}** here. You asked: "${last}". That's a sharp question, and here's a second sentence so the voice has something to say.` }] },
+  const sys = body.systemInstruction.parts[0].text;
+  let text = `[surprised] **${who}** here. You asked: "${last}". That's a sharp question, and here's a second sentence so the voice has something to say.`;
+  if (/QUIZ ME/.test(sys)) text = `[happy] Question 1: What does LIFO stand for?\nA. Last In First Out\nB. Least In Full Out [score: 1/1]`;
+  if (/LANGUAGE PRACTICE in (\w+)/.test(sys)) text = `[happy] ¡Hola! ¿Cómo estás?\nCorrection: Perfect!\nMeaning: Hi! How are you?`;
+  if (/my name is (\w+)/i.test(last)) text = `[happy] Nice to meet you, ${last.match(/my name is (\w+)/i)[1]}! [remember: The user's name is ${last.match(/my name is (\w+)/i)[1]}]`;
+  return Response.json({ candidates: [{ content: { parts: [{ text }] },
     groundingMetadata: { groundingChunks: [{ web: { uri: 'https://www.nasa.gov/', title: 'nasa.gov' } }] } }] });
 };
 http.createServer(async (req, res) => {

@@ -65,9 +65,59 @@ pop culture, games, music and creative ideas. You cheer the user on. You sometim
 but you still give real, correct answers.`,
 };
 
+// ---------------- practice modes ----------------
+// The site's "purpose": each character can coach you in one of these modes.
+// {topic} and {lang} are filled in from what the user picked.
+
+const LANGS = ['Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Japanese', 'Korean', 'Chinese', 'Hindi', 'Arabic'];
+
+const MODES = {
+  chat: '',
+  quiz: `MODE: QUIZ ME (exam practice) on: {topic}.
+Ask exactly ONE question at a time: either multiple choice (options A to D, each on its own line) or short answer.
+Then stop and wait for the user's answer. When they answer: say whether it's right, explain why in one or two
+sentences, then ask the next question. Make questions a bit harder as they get them right.
+Keep a running score, and end every reply that grades an answer with a tag like [score: 3/4].
+If the topic is missing or vague, first ask what subject and level they want to be quizzed on.`,
+  interview: `MODE: MOCK INTERVIEW for the role: {topic}.
+You are the interviewer. Ask ONE interview question at a time, mixing behavioral and technical questions,
+getting gradually harder. After each answer give: a rating out of 10, one thing they did well, and one concrete
+tip to improve, then ask the next question. Be realistic and fair, but keep your personality.`,
+  language: `MODE: LANGUAGE PRACTICE in {lang}.
+Chat with the user mostly in {lang}, using short, simple sentences suited to a learner (match their level).
+Always ask a question back to keep the conversation going.
+After your {lang} reply, add a new line starting with "Correction:" (in English) that gently corrects mistakes in the
+user's last message, or says it was perfect. Then add a line starting with "Meaning:" with an English translation of
+your {lang} reply. Do not use the [score] tag in this mode.`,
+};
+
+const MEMORY_RULE = `Memory: if the user shares a lasting fact worth remembering for future chats (their name, goals,
+school or job, upcoming exams, interests, preferences), add ONE tag at the very end of your reply like
+[remember: The user is preparing for a data structures exam in December]. Only for genuinely useful facts,
+never for sensitive information (health, passwords, money, addresses).`;
+
+export function buildSystem(character, opts = {}) {
+  const parts = [PERSONAS[character], RULES, MEMORY_RULE];
+  const mem = opts.memory;
+  if (mem && (mem.name || mem.goals || (mem.facts || []).length)) {
+    const lines = [];
+    if (mem.name) lines.push(`- Their name: ${mem.name}`);
+    if (mem.goals) lines.push(`- Their goals: ${mem.goals}`);
+    for (const f of mem.facts || []) lines.push(`- ${f}`);
+    parts.push(`What you remember about the user from earlier visits (use it naturally, don't recite it):\n${lines.join('\n')}`);
+  }
+  const mode = MODES[opts.mode || 'chat'];
+  if (mode) {
+    parts.push(mode
+      .replaceAll('{topic}', opts.topic || '(not chosen yet)')
+      .replaceAll('{lang}', opts.lang || 'Spanish'));
+  }
+  return parts.join('\n\n');
+}
+
 // ---------------- helpers ----------------
 
-const MAX_MESSAGES = 20;
+const MAX_MESSAGES = 24;
 const MAX_CHARS = 2000;
 const RATE_LIMIT = 20; // messages per minute per visitor (best effort)
 const hits = new Map();
@@ -112,6 +162,16 @@ function validate(body) {
     if (m.text.length > MAX_CHARS) return `Messages must be under ${MAX_CHARS} characters.`;
   }
   if (msgs[msgs.length - 1].role !== 'user') return 'The last message must be from the user.';
+  if (body.mode !== undefined && !(body.mode in MODES)) return 'Unknown mode.';
+  if (body.lang !== undefined && !LANGS.includes(body.lang)) return 'Unsupported language.';
+  if (body.topic !== undefined && (typeof body.topic !== 'string' || body.topic.length > 120)) return 'Topic must be a short string.';
+  const mem = body.memory;
+  if (mem !== undefined) {
+    if (typeof mem !== 'object' || mem === null) return 'memory must be an object.';
+    if (mem.name !== undefined && (typeof mem.name !== 'string' || mem.name.length > 40)) return 'memory.name is too long.';
+    if (mem.goals !== undefined && (typeof mem.goals !== 'string' || mem.goals.length > 300)) return 'memory.goals is too long.';
+    if (mem.facts !== undefined && (!Array.isArray(mem.facts) || mem.facts.length > 25 || mem.facts.some((x) => typeof x !== 'string' || x.length > 200))) return 'memory.facts is invalid.';
+  }
   return null;
 }
 
@@ -145,10 +205,10 @@ export function readGemini(data) {
   return { text, sources: sources.slice(0, 4), finish: cand?.finishReason };
 }
 
-async function callGemini(env, character, contents, withSearch) {
+async function callGemini(env, system, contents, withSearch) {
   const model = env.GEMINI_MODEL || DEFAULT_MODEL;
   const body = {
-    systemInstruction: { parts: [{ text: `${PERSONAS[character]}\n\n${RULES}` }] },
+    systemInstruction: { parts: [{ text: system }] },
     contents,
     generationConfig: { temperature: 0.9, maxOutputTokens: 2048 },
   };
@@ -163,14 +223,14 @@ async function callGemini(env, character, contents, withSearch) {
 // ---------------- the worker ----------------
 
 // Workers AI (Cloudflare's built-in models). messages: [{role, text}] from the site.
-export async function callWorkersAI(env, character, messages) {
-  const msgs = [{ role: 'system', content: `${PERSONAS[character]}\n\n${RULES}` }];
+export async function callWorkersAI(env, system, messages) {
+  const msgs = [{ role: 'system', content: system }];
   for (const m of messages.slice(-MAX_MESSAGES)) msgs.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text });
   const models = [env.CF_MODEL, ...CF_MODELS].filter(Boolean);
   let lastErr;
   for (const model of models) {
     try {
-      const out = await env.AI.run(model, { messages: msgs, max_tokens: 700, temperature: 0.8 });
+      const out = await env.AI.run(model, { messages: msgs, max_tokens: 900, temperature: 0.8 });
       const text = typeof out === 'string' ? out
         : out?.response ?? out?.choices?.[0]?.message?.content ?? out?.output_text ?? '';
       if (text && String(text).trim()) return { text: String(text).trim(), sources: [] };
@@ -189,7 +249,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors.headers });
-    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', characters: Object.keys(PERSONAS) }, 200, cors.headers);
+    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 3, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
     if (request.method !== 'POST' || !['/chat', '/'].includes(url.pathname)) return json({ error: 'Not found' }, 404, cors.headers);
     if (!cors.ok) return json({ error: 'This website is not allowed to use this server.' }, 403, cors.headers);
     if (!env.GEMINI_API_KEY && !env.AI) return json({ error: 'Server has no AI connected. Add a Workers AI binding named AI (or a GEMINI_API_KEY secret).' }, 500, cors.headers);
@@ -202,13 +262,15 @@ export default {
     const problem = validate(body);
     if (problem) return json({ error: problem }, 400, cors.headers);
 
+    const system = buildSystem(body.character, { mode: body.mode, topic: body.topic, lang: body.lang, memory: body.memory });
+
     // 1) Gemini, if a key is set
     if (env.GEMINI_API_KEY) {
       const contents = toGeminiContents(body.messages);
       try {
-        let res = await callGemini(env, body.character, contents, true);
+        let res = await callGemini(env, system, contents, true);
         // search grounding unavailable (quota/model)? answer without it rather than failing
-        if (!res.ok && [400, 403, 429].includes(res.status)) res = await callGemini(env, body.character, contents, false);
+        if (!res.ok && [400, 403, 429].includes(res.status)) res = await callGemini(env, system, contents, false);
         if (res.ok) {
           const { text, sources, finish } = readGemini(await res.json());
           if (text) return json({ reply: text, sources }, 200, cors.headers);
@@ -224,7 +286,7 @@ export default {
     }
     // 2) Workers AI (also the fallback when Gemini fails)
     try {
-      const { text, sources } = await callWorkersAI(env, body.character, body.messages);
+      const { text, sources } = await callWorkersAI(env, system, body.messages);
       return json({ reply: text, sources }, 200, cors.headers);
     } catch (e) {
       const msg = String(e);
