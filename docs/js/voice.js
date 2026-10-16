@@ -96,8 +96,7 @@ export class Voice {
         await this.speakHD(parts, profile.hd, token);
         return;
       } catch (e) {
-        console.warn('HD voice failed, falling back to standard voice', e);
-        this.onStatus('HD voice could not load, so the standard voice is used instead.');
+        console.warn('Natural voice failed for this reply, using the browser voice', e);
       }
     }
     if (token === this.token) await this.speakWeb(parts, profile.web, token, lang);
@@ -166,7 +165,19 @@ export class Voice {
         },
       });
     })();
-    this.ttsPromise.then(() => (this.hdReady = true)).catch(() => (this.ttsPromise = null));
+    // Once loaded, time a short phrase. If this device can't generate speech faster than it
+    // plays, natural voices would leave awkward silences, so the browser voice is kept instead.
+    this.ttsPromise = this.ttsPromise.then(async (tts) => {
+      while (document.hidden) await new Promise((r) => setTimeout(r, 1000)); // hidden tabs run slowly
+      const t0 = performance.now();
+      const a = await tts.generate('Hello there, it is nice to meet you.', { voice: 'af_heart' });
+      const secs = (performance.now() - t0) / 1000;
+      this.rtf = secs / (a.audio.length / a.sampling_rate);
+      this.hdSlow = this.rtf > 0.85;
+      this.hdReady = !this.hdSlow;
+      return tts;
+    });
+    this.ttsPromise.catch(() => (this.ttsPromise = null));
     return this.ttsPromise;
   }
 
@@ -187,7 +198,10 @@ export class Voice {
     const gen = (text) => tts.generate(text, { voice: prof.voice, speed: prof.speed });
     let next = gen(parts[0]);
     for (let i = 0; i < parts.length; i++) {
-      const audio = await next;
+      // if the very first sentence takes too long, give up on natural voice for this reply
+      const audio = i === 0
+        ? await Promise.race([next, new Promise((_, rej) => setTimeout(() => rej(new Error('natural voice too slow')), 5000))])
+        : await next;
       if (token !== this.token) return;
       if (i + 1 < parts.length) next = gen(parts[i + 1]); // make the next sentence while this one plays
       await new Promise((resolve) => {

@@ -512,7 +512,10 @@ async function setNatural(on, { auto } = {}) {
   els.hdToggle.textContent = 'Natural voices: loading…';
   try {
     await voice.loadHD((pct) => { if (voice.hd) els.hdToggle.textContent = `Natural voices: ${pct}%`; });
-    if (voice.hd) els.hdToggle.textContent = 'Natural voices: on';
+    if (voice.hdSlow) {
+      els.hdToggle.textContent = 'Natural voices: too slow here';
+      els.hdToggle.title = 'This device generates the natural voice slower than real time, so the browser voice is used. Microsoft Edge has natural-sounding built-in voices.';
+    } else if (voice.hd) els.hdToggle.textContent = 'Natural voices: on';
   } catch (e) {
     console.warn(e);
     voice.hd = false;
