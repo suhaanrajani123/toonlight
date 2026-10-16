@@ -502,23 +502,28 @@ els.voiceToggle.addEventListener('click', () => {
   write('toonlight:voice', voice.enabled ? 'on' : 'off');
   setVoiceUI();
 });
-els.hdToggle.addEventListener('click', async () => {
-  voice.hd = !voice.hd;
-  els.hdToggle.setAttribute('aria-pressed', String(voice.hd));
-  write('toonlight:hd', voice.hd ? 'on' : 'off');
-  if (!voice.hd) return;
-  voice.audioContext().resume();
-  els.hdToggle.textContent = 'Downloading…';
+// Natural voices: on by default on computers. The model (~90 MB, downloaded once, then cached)
+// loads quietly in the background; until it's ready, the browser's own voice is used.
+async function setNatural(on, { auto } = {}) {
+  voice.hd = on;
+  els.hdToggle.setAttribute('aria-pressed', String(on));
+  if (!auto) write('toonlight:hd', on ? 'on' : 'off');
+  if (!on) { els.hdToggle.textContent = 'Natural voices: off'; return; }
+  els.hdToggle.textContent = 'Natural voices: loading…';
   try {
-    await voice.loadHD((pct) => (els.hdToggle.textContent = `Downloading ${pct}%`));
-    els.hdToggle.textContent = 'HD voices on';
+    await voice.loadHD((pct) => { if (voice.hd) els.hdToggle.textContent = `Natural voices: ${pct}%`; });
+    if (voice.hd) els.hdToggle.textContent = 'Natural voices: on';
   } catch (e) {
     console.warn(e);
     voice.hd = false;
     els.hdToggle.setAttribute('aria-pressed', 'false');
-    els.hdToggle.textContent = 'HD voices';
-    notice("HD voices couldn't download. The standard voices still work.");
+    els.hdToggle.textContent = 'Natural voices: off';
+    if (!auto) notice("Natural voices couldn't download. The standard voices still work.");
   }
+}
+els.hdToggle.addEventListener('click', () => {
+  if (voice.hd) voice.audioContext?.().resume?.();
+  setNatural(!voice.hd);
 });
 voice.onStatus = notice;
 
@@ -559,12 +564,23 @@ const tick = () => (clock.textContent = new Date().toLocaleTimeString([], { hour
 tick();
 setInterval(tick, 20000);
 
+// browsers only allow sound after the first click or key press
+const unlockAudio = () => { try { voice.audioContext().resume(); } catch {} };
+addEventListener('pointerdown', unlockAudio, { once: true });
+addEventListener('keydown', unlockAudio, { once: true });
+
 // ---------- start ----------
 
 if (isDemo()) notice('Demo mode: the AI server isn’t connected, so characters can’t really answer yet.');
 voice.enabled = read('toonlight:voice', 'on') !== 'off';
 setVoiceUI();
-if (read('toonlight:hd', 'off') === 'on') els.hdToggle.click();
+{
+  // default: on for computers, off for phones/data saver (the download is ~90 MB)
+  const pref = read('toonlight:hd', 'auto');
+  const lowData = navigator.connection?.saveData || matchMedia('(pointer: coarse)').matches;
+  if (pref === 'on' || (pref === 'auto' && !lowData)) setNatural(true, { auto: pref === 'auto' });
+  else els.hdToggle.textContent = 'Natural voices: off';
+}
 
 buildCast();
 buildModes();

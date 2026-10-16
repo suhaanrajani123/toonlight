@@ -30,7 +30,8 @@ export function splitSentences(text) {
 export class Voice {
   constructor() {
     this.enabled = true;
-    this.hd = false;
+    this.hd = false;        // user wants natural voices
+    this.hdReady = false;   // natural voice model finished downloading
     this.token = 0;          // bumps on every stop(), so old speech loops know to quit
     this.webActive = false;
     this.lastBoundary = 0;
@@ -90,7 +91,7 @@ export class Voice {
     }
     const parts = splitSentences(text);
     const english = /^en/i.test(lang);
-    if (this.hd && english) {
+    if (this.hd && this.hdReady && english) {
       try {
         await this.speakHD(parts, profile.hd, token);
         return;
@@ -165,7 +166,7 @@ export class Voice {
         },
       });
     })();
-    this.ttsPromise.catch(() => (this.ttsPromise = null));
+    this.ttsPromise.then(() => (this.hdReady = true)).catch(() => (this.ttsPromise = null));
     return this.ttsPromise;
   }
 
@@ -196,7 +197,7 @@ export class Voice {
         src.buffer = buf;
         src.playbackRate.value = prof.pitch; // pitch shift: >1 squeakier, <1 deeper
         src.connect(this.analyser);
-        src.onended = () => { if (this.source === src) this.source = null; resolve(); };
+        src.onended = () => { if (this.source === src) this.source = null; setTimeout(resolve, 120); };
         this.source = src;
         src.start();
       });
