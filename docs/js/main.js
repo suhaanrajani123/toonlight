@@ -206,6 +206,8 @@ els.setup.addEventListener('submit', (e) => {
 
 function showScore(score) {
   if (!score || practice.mode !== 'quiz') return;
+  // only after you've actually answered something (the AI sometimes tags its first question)
+  if (log.filter((m) => m.role === 'user').length < 2 || score.total < 1) return;
   els.score.hidden = false;
   els.scoreNum.textContent = `${score.right}/${score.total}`;
   els.score.classList.remove('bump');
