@@ -35,12 +35,15 @@ export class ChatError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
-let demoTurn = 0;
+// Demo mode (no AI server connected): be honest instead of pretending to answer.
 function demoReply(character, history) {
   const last = history[history.length - 1]?.text || '';
   if (/^(hi|hello|hey|yo|sup|hiya)\b/i.test(last)) return { mood: 'happy', text: character.greeting, sources: [] };
-  const line = character.demo[demoTurn++ % character.demo.length];
-  return { mood: ['happy', 'thinking', 'surprised'][demoTurn % 3], text: line, sources: [] };
+  return {
+    mood: 'sad',
+    text: `I'd love to help with that, but my AI brain isn't connected yet, so I can't really answer. Once this site's AI server is set up, ask me again and I'll give you a proper answer!`,
+    sources: [],
+  };
 }
 
 export async function ask(character, history) {

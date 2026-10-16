@@ -5,7 +5,7 @@
 // so nobody can rewrite them from the browser.
 //
 // model → optional: a .vrm / .glb file in docs/models/ that replaces the built-in look,
-//   e.g. model: 'models/seraphine.vrm' (see README → Use your own 3D models).
+//   e.g. model: 'models/elara.vrm' (see README → Use your own 3D models).
 //
 // voice.web → the browser's built-in voices (instant, free, quality depends on your OS)
 //   pitch 0–2, rate 0.1–10, gender is a hint for picking a voice.
@@ -13,73 +13,67 @@
 //   ~90 MB one-time download). `voice` is a Kokoro voice name, `speed` is talking speed,
 //   `pitch` shifts the playback (1 = normal, 1.3 = squeaky, 0.85 = deep).
 
-import * as seraphine from './characters/seraphine.js';
 import * as kaito from './characters/kaito.js';
-import * as yuzu from './characters/yuzu.js';
-import * as pip from './characters/pip.js';
-import * as bloop from './characters/bloop.js';
-import * as marlowe from './characters/marlowe.js';
+import * as raven from './characters/raven.js';
+import * as jun from './characters/jun.js';
+import * as elara from './characters/elara.js';
+import * as fennick from './characters/fennick.js';
+import * as stella from './characters/stella.js';
 
 export const ROSTER = [
   {
-    id: 'seraphine', name: 'Seraphine Valcrest', short: 'Seraphine', kind: 'Anime',
-    tagline: 'Regal strategist. Ask her for advice, history, or a plan.',
-    greeting: 'Welcome to my court. Speak freely: what counsel do you seek today?',
-    build: seraphine.build,
-    theme: { top: '#2f2869', bottom: '#c3b2f4', accent: '#6d47cf' },
-    voice: { web: { pitch: 1.0, rate: 0.92, gender: 'female' }, hd: { voice: 'bf_emma', speed: 0.92, pitch: 1.0 } },
-    prompts: ['Help me plan my study week', 'Why did the Roman Empire fall?', 'How do I negotiate a raise?'],
-    demo: ['A fine question. Allow me to consider it as I would any matter of state.', 'Patience. Every great plan begins with a single, deliberate move.'],
-  },
-  {
     id: 'kaito', name: 'Kaito Hayabusa', short: 'Kaito', kind: 'Anime',
-    tagline: 'Cheerful wandering adventurer. Your hype-man for goals, sports and big plans.',
+    tagline: 'Cheerful wandering adventurer. Your hype-man for goals, fitness and big plans.',
     greeting: "Hey there, traveler! Name's Kaito. Pull up a seat. Whatever quest you're on, we'll crush it together!",
     build: kaito.build,
     theme: { top: '#c96a2e', bottom: '#f6d99b', accent: '#8a4a1c' },
     voice: { web: { pitch: 0.95, rate: 1.08, gender: 'male' }, hd: { voice: 'am_michael', speed: 1.08, pitch: 1.0 } },
-    prompts: ['Give me a 10-minute workout', 'Who won the last World Cup?', "I'm losing motivation, help!"],
-    demo: ["Let's GO! That's the spirit I like to hear!", "Hey, every champion started as a beginner. Believe it!"],
+    prompts: ['Give me a 10-minute workout', 'Plan a weekend trip for me', "I'm losing motivation, help!"],
   },
   {
-    id: 'yuzu', name: 'Yuzu Amano', short: 'Yuzu', kind: 'Anime',
-    tagline: 'Shy genius. Science, math and code, explained gently.',
-    greeting: "Oh! H-hi... I'm Yuzu. If you have a science or coding question, I'd really love to help.",
-    build: yuzu.build,
-    theme: { top: '#5fc9b3', bottom: '#f1f9e6', accent: '#23865a' },
-    voice: { web: { pitch: 1.5, rate: 1.0, gender: 'female' }, hd: { voice: 'af_nicole', speed: 1.0, pitch: 1.1 } },
-    prompts: ['Explain recursion simply', 'How do black holes form?', 'What is a hash map?'],
-    demo: ["Um, okay! So... sorry, I get excited about this stuff.", "That's actually a really good question! Let me think..."],
+    id: 'raven', name: 'Raven Ashford', short: 'Raven', kind: 'Anime',
+    tagline: 'Street-smart night-market rogue. Straight answers, news and real-world advice.',
+    greeting: "Well, look who wandered into the night market. I'm Raven. Ask me anything, I'll give it to you straight.",
+    build: raven.build,
+    theme: { top: '#1b1d2e', bottom: '#565b7d', accent: '#6c5fc7' },
+    voice: { web: { pitch: 0.9, rate: 1.0, gender: 'female' }, hd: { voice: 'af_nova', speed: 1.0, pitch: 0.97 } },
+    prompts: ['How do I spot a scam message?', 'Explain how inflation works', 'Tips for staying safe in a new city'],
   },
   {
-    id: 'pip', name: 'Professor Pip', short: 'Pip', kind: 'Cartoon',
-    tagline: 'Grumpy inventor owl. Knows how everything works.',
-    greeting: "Hmph. Another visitor. Fine, fine. Ask the Professor how something works, and make it quick.",
-    build: pip.build,
-    theme: { top: '#2e3a60', bottom: '#eab874', accent: '#b8701a' },
-    voice: { web: { pitch: 0.65, rate: 0.85, gender: 'male' }, hd: { voice: 'bm_lewis', speed: 0.88, pitch: 0.92 } },
-    prompts: ['How does a fridge keep things cold?', 'Who invented the light bulb?', 'How do airplanes stay up?'],
-    demo: ['Hmph. Kids these days and their questions. Very well.', 'Back in my day, we read the manual. Listen closely.'],
+    id: 'jun', name: 'Jun Arata', short: 'Jun', kind: 'Anime',
+    tagline: 'Laid-back tech kid from the arcade. Coding, gadgets and games.',
+    greeting: "Yo! I'm Jun. Coding, computers, games, gadgets, whatever. Hit me with a question!",
+    build: jun.build,
+    theme: { top: '#2a2f45', bottom: '#9aaccc', accent: '#c93d84' },
+    voice: { web: { pitch: 1.15, rate: 1.05, gender: 'male' }, hd: { voice: 'am_puck', speed: 1.05, pitch: 1.04 } },
+    prompts: ['Explain recursion simply', 'Which laptop specs matter for coding?', 'What is an API?'],
   },
   {
-    id: 'bloop', name: 'Bloop', short: 'Bloop', kind: 'Cartoon',
-    tagline: 'A jelly blob of jokes, puns and very fun facts.',
-    greeting: "Bloop bloop! Hiii! I'm Bloop! Wanna hear a joke? Or a fact? Or a joke about a fact?",
-    build: bloop.build,
-    theme: { top: '#3cc9b9', bottom: '#d9fff2', accent: '#0f8c6c' },
-    voice: { web: { pitch: 1.9, rate: 1.2, gender: 'female' }, hd: { voice: 'af_heart', speed: 1.15, pitch: 1.35 } },
-    prompts: ['Tell me a science pun', 'Give me a weird animal fact', "What's something fun to do today?"],
-    demo: ['Hehe, that tickles my jelly!', "Ooh ooh! Did you know octopuses have three hearts? I have zero! I'm jelly!"],
+    id: 'elara', name: 'Elara Quinn', short: 'Elara', kind: 'Anime',
+    tagline: 'Calm city girl. Life advice, study help, food and recipes.',
+    greeting: "Hi, I'm Elara. Take a breath, get comfy. What's on your mind today?",
+    build: elara.build,
+    theme: { top: '#7b6f9e', bottom: '#f2d4cf', accent: '#a0505a' },
+    voice: { web: { pitch: 1.05, rate: 0.95, gender: 'female' }, hd: { voice: 'bf_isabella', speed: 0.95, pitch: 1.0 } },
+    prompts: ['Give me a chicken biryani recipe', 'How do I stop procrastinating?', 'Help me plan a study schedule'],
   },
   {
-    id: 'marlowe', name: 'Marlowe', short: 'Marlowe', kind: 'Cartoon',
-    tagline: 'Noir detective cat. Investigates the news and current events.',
-    greeting: "The name's Marlowe. Every question's a case, and I always crack the case. What's the mystery?",
-    build: marlowe.build,
-    theme: { top: '#1f1c33', bottom: '#6e5b7b', accent: '#9a3550' },
-    voice: { web: { pitch: 0.5, rate: 0.9, gender: 'male' }, hd: { voice: 'am_fenrir', speed: 0.92, pitch: 0.88 } },
-    prompts: ["What's in the news today?", 'Investigate: who runs NASA right now?', 'Any big tech stories this week?'],
-    demo: ['The city was quiet tonight. Too quiet. Then you walked in with a question.', "I've seen cases like this before. Let me dig."],
+    id: 'fennick', name: 'Fennick', short: 'Fennick', kind: 'Cartoon',
+    tagline: 'Fox explorer and map-maker. Geography, history, nature and trivia.',
+    greeting: "Ah, a fellow explorer! Fennick, cartographer extraordinaire. Where shall our curiosity take us today?",
+    build: fennick.build,
+    theme: { top: '#3f8580', bottom: '#efe1bd', accent: '#b85d1c' },
+    voice: { web: { pitch: 1.15, rate: 1.02, gender: 'male' }, hd: { voice: 'bm_george', speed: 1.02, pitch: 1.06 } },
+    prompts: ['Why are there time zones?', 'Tell me a weird animal fact', 'How were the pyramids built?'],
+  },
+  {
+    id: 'stella', name: 'Stella Nova', short: 'Stella', kind: 'Cartoon',
+    tagline: 'Star-powered hype girl. Jokes, fun facts, music and creative ideas.',
+    greeting: "Heyyy! Stella Nova here, your favorite shooting star! Wanna hear a joke, a fun fact, or something totally new?",
+    build: stella.build,
+    theme: { top: '#e2433b', bottom: '#ffd36b', accent: '#b8261d' },
+    voice: { web: { pitch: 1.45, rate: 1.12, gender: 'female' }, hd: { voice: 'af_heart', speed: 1.12, pitch: 1.12 } },
+    prompts: ['Tell me a science pun', 'Give me a fun fact about space', 'Ideas for a birthday party?'],
   },
 ];
 

@@ -4,10 +4,10 @@
 <script type="importmap">{"imports":{"three":"../vendor/three/three.module.js","three/addons/":"../vendor/three/addons/"}}</script>
 </head><body><canvas id="c"></canvas>
 <script type="module">
-// Dev tool: preview one character. Try ?c=bloop&mood=happy&mouth=0.6&turn=0.5
+// Dev tool: preview one character. Try ?c=stella&mood=happy&mouth=0.6&turn=0.5
 import { Stage } from '../js/stage.js';
 const q = new URLSearchParams(location.search);
-const id = q.get('c') || 'seraphine';
+const id = q.get('c') || 'kaito';
 const mod = await import(`../js/characters/${id}.js`);
 const stage = new Stage(document.getElementById('c'));
 const rig = mod.build();

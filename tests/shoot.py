@@ -1,4 +1,4 @@
-# Screenshot characters from the dev preview page. Usage: python3 shoot.py seraphine [mood] [mouth] [turn]
+# Screenshot characters from the dev preview page. Usage: python3 shoot.py kaito [mood] [mouth] [turn]
 import sys, subprocess, time, os
 from playwright.sync_api import sync_playwright
 out = os.environ.get('OUT', '/tmp/claude-0/-home-claude/3fe70163-cebc-57b3-9939-d7602cda3cd0/scratchpad/shots')

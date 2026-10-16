@@ -11,7 +11,8 @@ def check(cond, msg):
 
 def with_api(page, url):
     def handler(route):
-        body = open('docs/js/config.js').read().replace("API_URL: ''", f"API_URL: '{url}'")
+        import re
+        body = re.sub(r"API_URL: '[^']*'", f"API_URL: '{url}'", open('docs/js/config.js').read())
         route.fulfill(status=200, content_type='text/javascript', body=body)
     page.route('**/js/config.js', handler)
 
@@ -23,11 +24,12 @@ with sync_playwright() as p:
     errors = []
     pg.on('pageerror', lambda e: errors.append(str(e)))
     pg.on('console', lambda m: m.type == 'error' and 'TUNNEL' not in m.text and errors.append(m.text))  # sandbox blocks Google Fonts
+    with_api(pg, '')  # demo mode
     pg.goto('http://localhost:8765/')
     pg.wait_for_function('[...document.querySelectorAll("#cast .face")].every(e => e.style.backgroundImage)', timeout=90000)
     check(pg.locator('#cast button').count() == 6, 'six characters in the cast')
     check(pg.locator('#notice').is_visible() and 'Demo mode' in pg.inner_text('#notice'), 'demo-mode notice shown')
-    check(pg.inner_text('#name') == 'Seraphine Valcrest', 'starts on Seraphine')
+    check(pg.inner_text('#name') == 'Kaito Hayabusa', 'starts on Kaito')
     bgs = pg.eval_on_selector_all('#cast .face', 'els => els.filter(e => e.style.backgroundImage.includes("data:image")).length')
     check(bgs == 6, f'portraits rendered ({bgs}/6)')
     pg.screenshot(path=f'{OUT}/01-desktop-demo.png')
@@ -36,15 +38,15 @@ with sync_playwright() as p:
     check(pg.locator('.msg.user').count() == 1 and pg.locator('.msg.bot').count() == 2, 'demo reply arrives')
     pg.wait_for_timeout(400)
     pg.screenshot(path=f'{OUT}/02-demo-reply.png')
-    for i, cid in enumerate(['kaito', 'yuzu', 'pip', 'bloop', 'marlowe']):
+    for i, cid in enumerate(['raven', 'jun', 'elara', 'fennick', 'stella']):
         pg.click(f'#cast [data-id="{cid}"]', no_wait_after=True)
         pg.wait_for_timeout(1300)
         pg.screenshot(path=f'{OUT}/03-{cid}.png')
-    check(pg.evaluate('location.hash') == '#marlowe', 'URL remembers the character')
+    check(pg.evaluate('location.hash') == '#stella', 'URL remembers the character')
     pg.reload(); pg.wait_for_timeout(5000)
-    check(pg.inner_text('#name') == 'Marlowe', 'reload keeps Marlowe')
-    pg.click('#cast [data-id="seraphine"]', no_wait_after=True); pg.wait_for_timeout(2500)
-    check(pg.locator('.msg.user').count() == 1, 'Seraphine chat history kept after reload')
+    check(pg.inner_text('#name') == 'Stella Nova', 'reload keeps Stella')
+    pg.click('#cast [data-id="kaito"]', no_wait_after=True); pg.wait_for_timeout(2500)
+    check(pg.locator('.msg.user').count() == 1, 'Kaito chat history kept after reload')
     pg.click('#clear'); pg.wait_for_timeout(200)
     check(pg.locator('.msg.user').count() == 0 and pg.locator('.suggest button').count() == 3, 'clear chat works')
     check(not errors, f'no console errors in demo mode {errors[:3]}')
@@ -57,7 +59,7 @@ with sync_playwright() as p:
     pg.on('pageerror', lambda e: errors.append(str(e)))
     pg.on('console', lambda m: m.type == 'error' and 'TUNNEL' not in m.text and errors.append(m.text))  # sandbox blocks Google Fonts
     with_api(pg, 'http://localhost:8787/chat')
-    pg.goto('http://localhost:8765/#marlowe')
+    pg.goto('http://localhost:8765/#raven')
     pg.wait_for_timeout(1500)
     check(not pg.locator('#notice').is_visible(), 'no demo notice when API is set')
     pg.click('#voice-toggle')  # sound off: mouth still moves
@@ -65,7 +67,7 @@ with sync_playwright() as p:
     pg.keyboard.press('Enter')
     pg.wait_for_selector('.msg.bot .sources a', timeout=10000)
     reply = pg.inner_text('.msg.bot >> nth=-1')
-    check('Marlowe here' in reply and '**' not in reply and '[surprised]' not in reply, 'reply shown, markdown + mood tag stripped')
+    check('Raven Ashford here' in reply and '**' not in reply and '[surprised]' not in reply, 'reply shown, markdown + mood tag stripped')
     check(pg.get_attribute('.sources a', 'href') == 'https://www.nasa.gov/', 'source link shown')
     pg.wait_for_timeout(250)
     st = pg.evaluate('({mood: window.__toonlight.stage.rig.mood, speaking: window.__toonlight.voice.speaking, mouth: window.__toonlight.stage.rig.mouthOpen})')
@@ -78,7 +80,7 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={'width': 1366, 'height': 800})
     pg.set_default_timeout(90000)
     with_api(pg, 'http://localhost:9999/chat')
-    pg.goto('http://localhost:8765/#yuzu'); pg.wait_for_timeout(1200)
+    pg.goto('http://localhost:8765/#jun'); pg.wait_for_timeout(1200)
     pg.fill('#input', 'hello'); pg.click('#send')
     pg.wait_for_selector('.msg.system', timeout=10000)
     check("Couldn't reach the AI server" in pg.inner_text('.msg.system'), 'friendly error when server is down')
@@ -87,7 +89,7 @@ with sync_playwright() as p:
 
     # ---- phone ----
     pg = b.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
-    pg.goto('http://localhost:8765/#bloop'); pg.wait_for_timeout(2500)
+    pg.goto('http://localhost:8765/#fennick'); pg.wait_for_timeout(2500)
     w = pg.evaluate('document.documentElement.scrollWidth')
     check(w <= 390, f'no sideways scroll on phone ({w}px)')
     pg.screenshot(path=f'{OUT}/05-phone.png')

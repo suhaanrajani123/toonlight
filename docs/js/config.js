@@ -7,7 +7,7 @@
 // with pre-written lines instead of real AI answers.
 
 export const CONFIG = {
-  API_URL: '',
+  API_URL: 'https://toonlight.suhaanrajani276.workers.dev/chat',
 
   // How many past messages to send with each question (more = better memory, slower).
   HISTORY_TURNS: 12,
