@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><title>model loader test</title>
+<script type="importmap">{"imports":{"three":"../vendor/three/three.module.js","three/addons/":"../vendor/three/addons/","three-vrm":"../vendor/three-vrm/three-vrm.module.min.js"}}</script>
+</head><body style="margin:0;background:#cfc4ff"><canvas id="c" style="width:100vw;height:100vh;display:block"></canvas>
+<script type="module">
+// Builds a small rigged test character (bones + jawOpen/eyeBlink morphs + idle clip),
+// exports it to .glb in memory, then loads it back through the site's real model loader.
+import * as THREE from 'three';
+import { GLTFExporter } from './testkit/GLTFExporter.js';
+import { loadModel } from '../js/vrm.js';
+import { Stage } from '../js/stage.js';
+const hips = new THREE.Bone(); hips.name = 'mixamorig:Hips';
+const head = new THREE.Bone(); head.name = 'mixamorig:Head'; head.position.y = 1.3; hips.add(head);
+const geo = new THREE.SphereGeometry(0.5, 32, 16); geo.translate(0, 1.6, 0);
+const body = new THREE.CylinderGeometry(0.3, 0.4, 1.1, 24); body.translate(0, 0.55, 0);
+const merged = new THREE.BufferGeometry();
+const pos = [...body.attributes.position.array, ...geo.attributes.position.array];
+const idx = [...body.index.array, ...geo.index.array.map((i) => i + body.attributes.position.count)];
+merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); merged.setIndex(idx); merged.computeVertexNormals();
+const n = merged.attributes.position.count, si = [], sw = [], jaw = [], blink = [];
+for (let i = 0; i < n; i++) {
+  const y = merged.attributes.position.getY(i); const onHead = y > 1.1;
+  si.push(onHead ? 1 : 0, 0, 0, 0); sw.push(1, 0, 0, 0);
+  jaw.push(0, onHead && y < 1.45 ? -0.15 : 0, 0); blink.push(0, onHead && y > 1.65 ? -0.05 : 0, 0);
+}
+merged.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+merged.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+merged.morphAttributes.position = [new THREE.Float32BufferAttribute(jaw, 3), new THREE.Float32BufferAttribute(blink, 3)];
+const mesh = new THREE.SkinnedMesh(merged, new THREE.MeshStandardMaterial({ color: 0xff8855, roughness: 0.4 }));
+mesh.morphTargetDictionary = { jawOpen: 0, eyeBlinkLeft: 1 }; mesh.morphTargetInfluences = [0, 0];
+mesh.add(hips); mesh.bind(new THREE.Skeleton([hips, head]));
+const scene = new THREE.Scene(); scene.add(mesh);
+const clip = new THREE.AnimationClip('Idle', 2, [new THREE.VectorKeyframeTrack('mixamorig:Hips.position', [0, 1, 2], [0, 0, 0, 0, 0.03, 0, 0, 0, 0])]);
+const glb = await new GLTFExporter().parseAsync(scene, { binary: true, animations: [clip] });
+const url = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
+const rig = await loadModel(url);
+const stage = new Stage(document.getElementById('c')); stage.show(rig); stage.entrance = 1; rig.root.scale.setScalar(1);
+let m = 0; stage.mouthLevel = () => m;
+const meshes = []; rig.root.traverse((o) => o.morphTargetInfluences && meshes.push(o));
+await new Promise((r) => setTimeout(r, 400));
+const before = rig.head.quaternion.clone();
+m = 0.9; stage.mouse.set(0.8, 0);
+await new Promise((r) => setTimeout(r, 900));
+const box = new THREE.Box3().setFromObject(rig.root);
+window.__result = {
+  headFound: rig.head.name, morphMeshes: meshes.length,
+  jaw: meshes[0]?.morphTargetInfluences[0], headTurned: rig.head.quaternion.angleTo(before),
+  height: +(box.max.y - box.min.y).toFixed(2), standsOnFloor: +box.min.y.toFixed(2),
+};
+</script></body></html>

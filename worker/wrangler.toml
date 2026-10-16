@@ -1,0 +1,9 @@
+# Only needed if you deploy with the command line (npx wrangler deploy).
+# If you paste worker.js into the Cloudflare dashboard instead, you can ignore this file.
+name = "toonlight"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+# Replace with your GitHub Pages address once the site is live. Keep localhost for testing.
+ALLOWED_ORIGINS = "*"

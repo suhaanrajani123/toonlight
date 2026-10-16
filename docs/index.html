@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Toonlight</title>
+  <meta name="description" content="Talk to six original 3D anime and cartoon characters, powered by free AI.">
+  <meta name="theme-color" content="#2f2869">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='34' r='26' fill='%237ef0c6' stroke='%232a2140' stroke-width='4'/><circle cx='24' cy='30' r='6' fill='%23fff' stroke='%232a2140' stroke-width='3'/><circle cx='40' cy='30' r='6' fill='%23fff' stroke='%232a2140' stroke-width='3'/><path d='M24 43q8 7 16 0' stroke='%232a2140' stroke-width='4' fill='none' stroke-linecap='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/three.module.js",
+        "three/addons/": "./vendor/three/addons/",
+        "three-vrm": "./vendor/three-vrm/three-vrm.module.min.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="app">
+    <section class="stage" aria-label="Character stage">
+      <canvas id="scene" role="img" aria-label="3D character"></canvas>
+      <p class="brand">Toonlight</p>
+      <div class="nametag">
+        <p class="kind" id="kind"></p>
+        <h1 id="name"></h1>
+        <p class="tagline" id="tagline"></p>
+      </div>
+      <div class="thought" id="thought" hidden aria-hidden="true"><span></span><span></span><span></span></div>
+      <nav class="cast" id="cast" aria-label="Choose a character"></nav>
+    </section>
+
+    <section class="chat" aria-label="Conversation">
+      <header class="chat-head">
+        <h2 id="chat-title">Talking with</h2>
+        <div class="toggles">
+          <button type="button" class="chip" id="voice-toggle" aria-pressed="true">Voice on</button>
+          <button type="button" class="chip" id="hd-toggle" aria-pressed="false" title="Better voices that run in your browser. One-time ~90 MB download.">HD voices</button>
+          <button type="button" class="chip quiet" id="clear">Clear chat</button>
+        </div>
+      </header>
+      <p class="notice" id="notice" hidden></p>
+      <ol class="messages" id="messages" aria-live="polite"></ol>
+      <div class="suggest" id="suggest"></div>
+      <form class="composer" id="composer">
+        <label class="sr-only" for="input">Your message</label>
+        <textarea id="input" rows="1" maxlength="1500" placeholder="Ask anything…" autocomplete="off"></textarea>
+        <button type="button" class="mic" id="mic" aria-pressed="false" aria-label="Talk with your microphone" title="Talk with your microphone">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+        </button>
+        <button type="submit" class="send" id="send">Send</button>
+      </form>
+    </section>
+  </div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
