@@ -40,7 +40,7 @@ export function build() {
   h.add(part(starGeo(0.05), m.star, { pos: [R * 0.6, R * 0.85, R * 0.1], rot: [0, 0.9, 0.3] }));     // star hair clip
 
   return new Rig({
-    root, head: h, face, restMouth: 0.55,
+    root, head: h, face, arms: { L, R: Rt }, restMouth: 0.55,
     tick(t, dt, rig) {
       // bouncy energy: the ponytail swings, the peace sign wiggles when she talks
       root.position.y = rig.rootBaseY + Math.abs(Math.sin(t * 2.2)) * 0.012;

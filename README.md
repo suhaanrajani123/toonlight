@@ -7,7 +7,19 @@
 | **Quiz me** | Exam practice on any topic: one question at a time, graded, with a running score |
 | **Mock interview** | A realistic interviewer for the role you choose; every answer gets a rating out of 10 and a tip |
 | **Language practice** | Chat in Spanish, French, Japanese, Hindi and more. They reply simply, correct your mistakes and speak in that language |
-| **Just chat** | Advice, explanations, recipes, ideas |
+| **Just chat** | Advice, explanations, recipes, ideas, and an assistant that does things for you (below) |
+
+**They can do things for you, too.** In *Just chat*, ask any character:
+
+| You say | You get |
+|---|---|
+| "Remind me in an hour to finish my math notes" | A reminder that rings while Toonlight is open, plus one-click *Add to Google Calendar* for your phone |
+| "Add a study session Friday at 4pm to my calendar" | Google Calendar opens with the event filled in (or an `.ics` file for Apple/Outlook) |
+| "WhatsApp Rahul that I won't make it to class" | WhatsApp opens with the message written and ready; you can edit it first. Save numbers under *Contacts* in the Notebook |
+| "Find me a wireless mouse on Amazon" | Amazon (or Walmart, Target, Best Buy) search results for exactly that |
+| "Libraries near NJIT" / "YouTube videos on recursion" | Google Maps / YouTube / Google search |
+
+Nothing happens without you: every action is a card with a button you press. Amazon can't be ordered from automatically (there's no customer ordering API), and WhatsApp has no official way to send from a personal account, so Toonlight gets everything ready and you tap *Send* or *Buy*.
 
 The characters also **remember you**: your name, your goals, and facts you share. They're saved in the **Notebook** (top right), only in your browser, and you can edit or delete anything there.
 
@@ -35,6 +47,8 @@ Your browser (GitHub Pages, free)                 Cloudflare Worker (free)      
 - **"Worldwide information"** comes from Gemini's built-in knowledge plus **Google Search grounding**. When a question needs fresh facts, the model searches, and the site shows the sources under the reply. That's why you don't need RAG here.
 - **Voices** come in two free options. The *Standard* voices are built into your browser. The *HD* voices use Kokoro, an open-source voice model that runs inside the browser after a ~90 MB one-time download.
 - **Moods:** the AI starts each reply with a tag like `[happy]`, and the character's eyebrows, eyes and mouth change to match.
+- **Body language:** characters wave hello, rest a hand on their chin while thinking, talk with their hands while speaking, and shrug, cheer or throw their hands up to match the reply (`docs/js/gestures.js`).
+- **Actions:** in chat, the AI can add a tag like `[action: {"type":"reminder","text":"…","in_minutes":60}]`. The site turns it into a card with a button (`docs/js/actions.js`). Links are always built by the site from fixed templates, never taken from the AI.
 
 ## Run it on your computer (2 minutes)
 
@@ -127,6 +141,8 @@ docs/                  ← the website (GitHub Pages serves this folder)
   js/voice.js          ← speech output + lip-sync
   js/listen.js         ← microphone input
   js/chat.js           ← talks to the worker, saves chat history
+  js/actions.js        ← reminders, calendar, messages, shopping cards
+  js/gestures.js       ← waving, thinking, talking with hands
   js/vrm.js            ← loads your own .vrm / .glb models
   models/              ← put your model files here
   dev/                 ← preview.html (one character) and model-test.html (loader self-test)

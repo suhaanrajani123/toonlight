@@ -9,6 +9,7 @@ import { ask, isDemo, loadHistory, saveHistory, clearHistory } from './chat.js';
 import { MODES, LANGS, modeById, langCode } from './modes.js';
 import { loadMemory, saveMemory, remember, memoryPayload } from './memory.js';
 import { saveModel, getModel, removeModel } from './models.js';
+import { describe, loadContacts, saveContacts, loadReminders, saveReminders, when } from './actions.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -125,6 +126,7 @@ async function select(id) {
   if (current !== c) return;
   stage.show(rig);
   rig.setMood('happy');
+  setTimeout(() => current === c && rig.gesture?.('wave'), 350);
   setTimeout(() => current === c && !busy && rig.setMood('neutral'), 2500);
 }
 
@@ -235,7 +237,7 @@ function greeting() {
   return memory.name ? `${current.greeting} Good to see you, ${memory.name}!` : current.greeting;
 }
 
-function bubble(role, text, { sources = [], who, fresh, memo } = {}) {
+function bubble(role, text, { sources = [], who, fresh, memo, actions, made } = {}) {
   const li = document.createElement('li');
   li.className = `msg ${role === 'user' ? 'user' : role === 'system' ? 'system' : 'bot'}${fresh ? ' new' : ''}`;
   if (role === 'assistant' && who) {
@@ -259,6 +261,10 @@ function bubble(role, text, { sources = [], who, fresh, memo } = {}) {
     l.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-play"/></svg><span>Listen</span>';
     l.addEventListener('click', () => listen(l, text));
     li.append(l);
+  }
+  for (const a of actions || []) {
+    const card = actionCard(a, made);
+    if (card) li.append(card);
   }
   for (const f of memo || []) {
     const n = document.createElement('p');
@@ -290,7 +296,7 @@ function bubble(role, text, { sources = [], who, fresh, memo } = {}) {
 function renderMessages() {
   els.messages.replaceChildren();
   bubble('assistant', greeting(), { who: current.short });
-  for (const m of log) bubble(m.role, m.text, { sources: m.sources, who: current.short, memo: m.memo });
+  for (const m of log) bubble(m.role, m.text, { sources: m.sources, who: current.short, memo: m.memo, actions: m.actions, made: m.made });
   renderSuggestions();
 }
 
@@ -352,16 +358,19 @@ async function send(text) {
     const memo = [];
     for (const f of reply.remember || []) if (remember(memory, f)) memo.push(f);
     if (memo.length) { saveMemory(memory); renderMemory(); }
-    const entry = { role: 'assistant', text: reply.text || '…', sources: reply.sources, memo, score: reply.score || undefined };
+    const actions = reply.actions?.length ? reply.actions : undefined;
+    const entry = { role: 'assistant', text: reply.text || (actions ? 'Here you go:' : '…'), sources: reply.sources, memo, score: reply.score || undefined, actions, made: actions ? Date.now() : undefined };
     const target = current === c && practice.mode === mode ? log : loadHistory(c.id, mode);
     target.push(entry);
     saveHistory(c.id, mode, target);
     typing.remove();
     if (current !== c || practice.mode !== mode) return;
-    bubble('assistant', entry.text, { sources: entry.sources, who: c.short, fresh: true, memo });
+    bubble('assistant', entry.text, { sources: entry.sources, who: c.short, fresh: true, memo, actions: entry.actions, made: entry.made });
     showScore(reply.score);
     rig.setMood(reply.mood);
     rig.thinking = false;
+    const g = gestureFor(reply, entry.text);
+    if (g) setTimeout(() => rig.gesture?.(g), 120);
     els.thought.hidden = true;
     busy = false;
     els.send.disabled = false;
@@ -382,6 +391,210 @@ async function send(text) {
     setTimeout(() => !busy && !voice.speaking && rig.setMood('neutral'), 3500);
   }
 }
+
+// Body language to go with a reply (talking with the hands happens on its own while speaking).
+function gestureFor(reply, text) {
+  if (reply.actions?.length) return 'explain';
+  if (/^(hi|hey|hello|hiya|howdy|good (morning|afternoon|evening))\b/i.test(text)) return 'wave';
+  switch (reply.mood) {
+    case 'happy': return Math.random() < 0.5 ? 'tada' : 'both';
+    case 'surprised': return 'surprised';
+    case 'angry': return 'hips';
+    case 'sad': return /not sure|don.t know|no idea|can.t|unfortunately/i.test(text) ? 'shrug' : null;
+    default: return voice.enabled ? null : (Math.random() < 0.5 ? 'explain' : null);
+  }
+}
+
+// ---------- actions: the card under a reply ----------
+
+function actionCard(a, made) {
+  const d = describe(a, made || Date.now(), { addReminder, hasReminder: (id) => reminders.some((r) => r.id === id) });
+  if (!d) return null;
+  const card = document.createElement('div');
+  card.className = 'action';
+  const k = document.createElement('p');
+  k.className = 'action-kind';
+  k.textContent = d.kind;
+  const t = document.createElement('p');
+  t.className = 'action-title';
+  t.textContent = d.title;
+  card.append(k, t);
+  if (d.detail) {
+    const p = document.createElement('p');
+    p.className = 'action-detail';
+    p.textContent = d.detail;
+    card.append(p);
+  }
+  let body = null;
+  if (d.body !== undefined) {
+    // the message is editable before you send it
+    body = document.createElement('textarea');
+    body.className = 'action-body';
+    body.value = d.body;
+    body.rows = Math.min(6, Math.max(2, Math.ceil(d.body.length / 42)));
+    body.setAttribute('aria-label', 'Message (you can edit it)');
+    card.append(body);
+  }
+  const row = document.createElement('div');
+  row.className = 'action-buttons';
+  for (const b of d.buttons) {
+    const el = b.run ? document.createElement('button') : document.createElement('a');
+    el.className = `btn btn-small${b.primary ? ' btn-accent' : ''}`;
+    el.textContent = b.label;
+    if (b.run) {
+      el.type = 'button';
+      el.disabled = !!b.done;
+      el.addEventListener('click', () => b.run(el));
+    } else if (b.download) {
+      el.href = '#';
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        const url = URL.createObjectURL(b.download);
+        const tmp = Object.assign(document.createElement('a'), { href: url, download: b.filename });
+        tmp.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      });
+    } else {
+      el.href = b.href || '#';
+      el.target = '_blank';
+      el.rel = 'noopener noreferrer';
+      if (b.hrefFrom) {
+        const update = () => (el.href = b.hrefFrom(body ? body.value : d.body || ''));
+        update();
+        body?.addEventListener('input', update);
+        // mailto/sms open an app; don't leave an empty tab behind
+        if (!el.href.startsWith('https:')) el.removeAttribute('target');
+      }
+    }
+    row.append(el);
+  }
+  card.append(row);
+  if (d.note) {
+    const n = document.createElement('p');
+    n.className = 'action-note';
+    n.textContent = d.note;
+    card.append(n);
+  }
+  return card;
+}
+
+// ---------- reminders (work while this site is open in a tab) ----------
+
+let reminders = loadReminders();
+const timers = new Map();
+
+async function addReminder(r) {
+  if (!reminders.some((x) => x.id === r.id)) reminders.push({ ...r, done: false });
+  saveReminders(reminders);
+  if ('Notification' in window && Notification.permission === 'default') {
+    try { await Notification.requestPermission(); } catch {}
+  }
+  scheduleReminders();
+  renderReminders();
+  return true;
+}
+
+function scheduleReminders() {
+  for (const r of reminders) {
+    if (r.done || timers.has(r.id)) continue;
+    const ms = r.at - Date.now();
+    if (ms > 2 ** 31 - 1) continue; // more than 24 days away: checked again on the next visit
+    timers.set(r.id, setTimeout(() => fireReminder(r), Math.max(0, ms)));
+  }
+}
+
+function chime() {
+  try {
+    const ctx = voice.audioContext();
+    [660, 880].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.22);
+      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + i * 0.22 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.22 + 0.5);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + i * 0.22);
+      o.stop(ctx.currentTime + i * 0.22 + 0.55);
+    });
+  } catch {}
+}
+
+async function fireReminder(r, { late = false } = {}) {
+  timers.delete(r.id);
+  if (r.done) return;
+  r.done = true;
+  saveReminders(reminders);
+  renderReminders();
+  const msg = late ? `Reminder (was due ${when(new Date(r.at))}): ${r.text}` : `⏰ Reminder: ${r.text}`;
+  bubble('system', msg, { fresh: true });
+  chime();
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try { new Notification('Toonlight reminder', { body: r.text, tag: r.id }); } catch {}
+  }
+  const rig = current && (await rigFor(current));
+  rig?.gesture?.('wave');
+  if (!late && voice.enabled) voice.speak(`Hey, just a reminder: ${r.text}`, current.voice);
+}
+
+function renderReminders() {
+  const list = $('reminders'), empty = $('reminders-empty');
+  if (!list) return;
+  list.replaceChildren();
+  const upcoming = reminders.filter((r) => !r.done).sort((a, b) => a.at - b.at);
+  for (const r of upcoming) {
+    const li = document.createElement('li');
+    const s = document.createElement('span');
+    s.textContent = `${r.text} · ${when(new Date(r.at))}`;
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '×';
+    x.setAttribute('aria-label', `Cancel reminder: ${r.text}`);
+    x.addEventListener('click', () => {
+      clearTimeout(timers.get(r.id));
+      timers.delete(r.id);
+      reminders = reminders.filter((y) => y.id !== r.id);
+      saveReminders(reminders);
+      renderReminders();
+    });
+    li.append(s, x);
+    list.append(li);
+  }
+  empty.hidden = upcoming.length > 0;
+}
+
+// ---------- contacts (only in this browser; used to fill in WhatsApp / text / email) ----------
+
+let contacts = loadContacts();
+function renderContacts() {
+  const list = $('contacts'), empty = $('contacts-empty');
+  list.replaceChildren();
+  contacts.forEach((c, i) => {
+    const li = document.createElement('li');
+    const s = document.createElement('span');
+    s.textContent = [c.name, c.phone, c.email].filter(Boolean).join(' · ');
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '×';
+    x.setAttribute('aria-label', `Remove ${c.name}`);
+    x.addEventListener('click', () => { contacts.splice(i, 1); saveContacts(contacts); renderContacts(); });
+    li.append(s, x);
+    list.append(li);
+  });
+  empty.hidden = contacts.length > 0;
+}
+$('contact-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = $('contact-name').value.trim(), how = $('contact-how').value.trim();
+  if (!name || !how) return;
+  const entry = { name };
+  if (how.includes('@')) entry.email = how; else entry.phone = how;
+  contacts = contacts.filter((c) => c.name.toLowerCase() !== name.toLowerCase());
+  contacts.push(entry);
+  saveContacts(contacts);
+  $('contact-name').value = '';
+  $('contact-how').value = '';
+  renderContacts();
+});
 
 function autoGrow() {
   els.input.style.height = 'auto';
@@ -429,6 +642,8 @@ function openNotebook() {
   els.notebook.classList.add('open');
   els.scrim.hidden = false;
   renderMemory();
+  renderReminders();
+  renderContacts();
   setTimeout(() => els.memName.focus(), 50);
 }
 function closeNotebook() {
@@ -626,6 +841,11 @@ setTheme(document.documentElement.dataset.theme || 'light', { save: false });
   if (pref === 'on' || (pref === 'auto' && !lowData)) setNatural(true, { auto: pref === 'auto' });
   else els.hdToggle.textContent = 'Natural voices: off';
 }
+
+// reminders that came due while the site was closed
+for (const r of reminders) if (!r.done && r.at < Date.now()) setTimeout(() => fireReminder(r, { late: true }), 1500);
+scheduleReminders();
+setInterval(scheduleReminders, 6 * 3600 * 1000);
 
 buildCast();
 buildModes();

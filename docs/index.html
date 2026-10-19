@@ -178,6 +178,25 @@
       </section>
 
       <section class="nb-section">
+        <h3>Reminders</h3>
+        <p class="nb-help">Ask any character, like "remind me in an hour to finish my math notes". They ring here while Toonlight is open in a tab; add them to your calendar to get them on your phone.</p>
+        <ul class="facts" id="reminders"></ul>
+        <p class="nb-empty hand" id="reminders-empty">No reminders yet.</p>
+      </section>
+
+      <section class="nb-section">
+        <h3>Contacts</h3>
+        <p class="nb-help">So "text Rahul I'm running late" goes straight to Rahul. Numbers stay in this browser and are never sent to the AI. Include the country code, like +1 for the US.</p>
+        <ul class="facts" id="contacts"></ul>
+        <p class="nb-empty hand" id="contacts-empty">No contacts yet.</p>
+        <form class="contact-form" id="contact-form">
+          <label class="field"><span>Name</span><input id="contact-name" type="text" maxlength="40" placeholder="Rahul" autocomplete="off"></label>
+          <label class="field"><span>Phone or email</span><input id="contact-how" type="text" maxlength="80" placeholder="+1 201 555 0123" autocomplete="off"></label>
+          <button type="submit" class="btn btn-small">Add contact</button>
+        </form>
+      </section>
+
+      <section class="nb-section">
         <h3>Voice</h3>
         <div class="toggle-row">
           <button type="button" class="btn btn-small" id="hd-toggle" aria-pressed="false">Natural voices</button>
@@ -209,7 +228,8 @@
     <ol>
       <li>Pick a character on the left.</li>
       <li>Choose what to practice: a quiz, a mock interview, a new language, or just chat.</li>
-      <li>Type or press the mic to talk. They answer out loud.</li>
+      <li>Type or press the mic to talk. Switch to Voice to hear them answer out loud.</li>
+      <li>In Just chat, they can do things for you: "remind me in an hour", "add study group Friday 4pm to my calendar", "WhatsApp Rahul that I'm late", "find a wireless mouse on Amazon". You always confirm with a button.</li>
       <li>Open the Notebook to tell them about you, or give a character your own 3D model.</li>
     </ol>
     <button type="button" class="btn btn-small" id="close-help">Got it</button>

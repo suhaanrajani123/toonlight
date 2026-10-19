@@ -28,7 +28,7 @@ export function build() {
   jacket(root, { mat: m.leather, collar: 'lapel', len: 0.5, zipper: m.silver, patch: m.patch, flare: 0.25 });
   backpack(root, { mat: m.blackSoft, strap: m.strap, roll: m.roll });
   const pendant = necklace(root, { cord: m.silver, pendant: m.silver, y: 1.45, z: 0.21, long: true });
-  const { R: Rt } = attachArms(root, {
+  const { L, R: Rt } = attachArms(root, {
     skin: m.skin, sleeveMat: m.leather, sleeve: 'full', upperR: 0.064, foreR: 0.052,
     left: { bracer: m.silver }, right: { bangles: [m.silver, m.strap, m.silver, m.strap] },
   }, { left: 'hip', right: 'open', width: 0.3 });
@@ -42,7 +42,7 @@ export function build() {
   cap(h, R, { mat: m.black, brim: m.black, patch: m.patch });
 
   return new Rig({
-    root, head: h, face, restMouth: 0.45,
+    root, head: h, face, arms: { L, R: Rt }, restMouth: 0.45,
     tick(t, dt, rig) {
       root.rotation.y = Math.sin(t * 0.6) * 0.04;
       const g = rig.speaking ? Math.sin(t * 3) * 0.16 + rig.mouthOpen * 0.1 : Math.sin(t * 1.1) * 0.03;

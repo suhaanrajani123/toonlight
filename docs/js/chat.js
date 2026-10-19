@@ -3,6 +3,7 @@
 
 import { CONFIG } from './config.js';
 import { MOOD_NAMES } from './toonkit.js';
+import { extractActions } from './actions.js';
 
 export const isDemo = () => !CONFIG.API_URL;
 
@@ -22,14 +23,15 @@ export function clearHistory(id, mode) {
 //   [happy]                      mood at the start (moves the face)
 //   [remember: The user is …]   a fact to save in memory
 //   [score: 3/4]                 quiz score
+//   [action: {"type": …}]        something to do for you (see actions.js)
 // Pull them all out, and strip markdown symbols (the text is read aloud).
 export function parseReply(raw) {
   const m = raw.match(/^\s*\[(\w+)\]\s*/);
   const mood = m && MOOD_NAMES.includes(m[1].toLowerCase()) ? m[1].toLowerCase() : 'neutral';
   const remember = [];
   let score = null;
-  const text = raw
-    .slice(m ? m[0].length : 0)
+  const { text: rest, actions } = extractActions(raw.slice(m ? m[0].length : 0));
+  const text = rest
     .replace(/\[\s*remember\s*:\s*([^\]]{3,240})\]/gi, (_, f) => { remember.push(f.trim()); return ''; })
     .replace(/\[\s*score\s*:\s*(\d{1,3})\s*\/\s*(\d{1,3})\s*\]/gi, (_, a, b) => { score = { right: +a, total: +b }; return ''; })
     .replace(new RegExp(`\\[(${MOOD_NAMES.join('|')})\\]`, 'gi'), '')
@@ -37,7 +39,7 @@ export function parseReply(raw) {
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return { mood, text, remember, score };
+  return { mood, text, remember, score, actions };
 }
 
 export class ChatError extends Error {
@@ -47,11 +49,11 @@ export class ChatError extends Error {
 // Demo mode (no AI server connected): be honest instead of pretending to answer.
 function demoReply(character, history) {
   const last = history[history.length - 1]?.text || '';
-  if (/^(hi|hello|hey|yo|sup|hiya)\b/i.test(last)) return { mood: 'happy', text: character.greeting, sources: [], remember: [], score: null };
+  if (/^(hi|hello|hey|yo|sup|hiya)\b/i.test(last)) return { mood: 'happy', text: character.greeting, sources: [], remember: [], score: null, actions: [] };
   return {
     mood: 'sad',
     text: "I'd love to help with that, but my AI brain isn't connected yet, so I can't really answer. Once this site's AI server is set up, ask me again and I'll give you a proper answer!",
-    sources: [], remember: [], score: null,
+    sources: [], remember: [], score: null, actions: [],
   };
 }
 
@@ -71,6 +73,13 @@ export async function ask(character, history, ctx = {}) {
   if (ctx.topic) body.topic = ctx.topic.slice(0, 120);
   if (ctx.mode === 'language' && ctx.lang) body.lang = ctx.lang;
   if (ctx.memory) body.memory = ctx.memory;
+  if (!ctx.mode || ctx.mode === 'chat') {
+    // the current time, so "remind me in an hour" / "Friday at 4" can be worked out
+    const now = new Date();
+    body.now = now.toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      + ` (ISO ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')})`;
+    try { body.tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch {}
+  }
   let res;
   try {
     res = await fetch(CONFIG.API_URL, {

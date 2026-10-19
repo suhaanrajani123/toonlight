@@ -6,6 +6,7 @@
 // one object that knows how to blink, move its mouth, show a mood and idle.
 
 import * as THREE from 'three';
+import { Gestures } from './gestures.js';
 
 export const INK = 0x2a2140; // outline + line-art colour (deep violet, not pure black)
 
@@ -219,8 +220,11 @@ export class Rig {
   // opts.restLid: 0 = wide awake, 0.4 = sleepy/half-lidded. opts.setMouth: custom mouth (e.g. a beak).
   // opts.tick(t, dt, rig): character-specific motion (tail, wings, wobble...).
   // opts.restMouth: how open the mouth stays when idle and smiling (0 = closed smile, 0.3 = grin).
-  constructor({ root, head, face, restLid = 0, restMouth = 0, setMouth, tick, height = 2.4 }) {
+  // opts.arms: { L, R } from attachArms, so the character can gesture (wave, think, talk with hands).
+  // opts.gestureArm: 'R' or 'L', the arm used for one-handed gestures.
+  constructor({ root, head, face, restLid = 0, restMouth = 0, setMouth, tick, height = 2.4, arms, gestureArm }) {
     Object.assign(this, { root, head, face, restLid, restMouth, customMouth: setMouth, customTick: tick, height });
+    this.gestures = arms ? new Gestures(arms, { primary: gestureArm }) : null;
     this.mood = 'neutral';
     this.m = { ...MOODS.neutral };
     this.mouthOpen = 0;
@@ -234,6 +238,9 @@ export class Rig {
   }
 
   setMood(name) { this.mood = MOODS[name] ? name : 'neutral'; }
+
+  // Play a one-off gesture: wave, explain, both, tada, shrug, surprised, hips (see gestures.js).
+  gesture(name) { this.gestures?.play(name); }
 
   update(t, dt, { mouth = 0, look } = {}) {
     // smooth everything so it never snaps
@@ -286,6 +293,8 @@ export class Rig {
     // breathing bob
     this.root.position.y = this.rootBaseY + Math.sin(t * 1.8) * 0.015;
 
+    this.gestures?.reset();
     if (this.customTick) this.customTick(t, dt, this);
+    this.gestures?.update(t, dt, this);
   }
 }

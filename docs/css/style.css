@@ -288,6 +288,17 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; letter-spacing: -0.0
 .typing .bubble { display: flex; gap: 5px; width: fit-content; padding: 14px 16px !important; }
 .memo { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0; font-family: var(--hand); font-weight: 700; font-size: 1.05rem; color: var(--ink-soft); }
 .memo::before { content: ''; width: 14px; height: 14px; border: 2px solid var(--ink); border-radius: 3px; background: var(--tint); transform: rotate(-8deg); }
+/* action cards: what a character prepared for you, confirmed with a button */
+.action { margin: 8px 0 0; padding: 11px 13px 12px; max-width: 420px; background: var(--paper); border: var(--line) solid var(--ink); border-radius: var(--wobble-sm); box-shadow: 4px 4px 0 var(--shade); display: grid; gap: 4px; }
+.action-kind { margin: 0; font-family: var(--hand); font-weight: 700; font-size: 1.05rem; line-height: 1; color: var(--ink-soft); }
+.action-title { margin: 0; font-weight: 700; font-size: 1rem; overflow-wrap: anywhere; }
+.action-detail, .action-note { margin: 0; font-size: 0.86rem; color: var(--ink-soft); }
+.action-note { margin-top: 2px; font-size: 0.8rem; }
+.action-body { margin: 4px 0 2px; width: 100%; padding: 8px 10px; font: inherit; font-size: 0.92rem; color: var(--ink); background: var(--cream); border: 2px solid var(--ink); border-radius: 8px; resize: vertical; }
+.action-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.action-buttons .btn { text-decoration: none; }
+.contact-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; align-items: end; margin-top: 4px; }
+.contact-form .btn { grid-column: 1 / -1; justify-self: start; }
 .sources { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.82rem; }
 .sources a { color: var(--ink); background: var(--cream); border: 2px solid var(--ink); border-radius: 999px; padding: 0 9px; text-decoration: none; }
 

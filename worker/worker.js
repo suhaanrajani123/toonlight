@@ -37,7 +37,8 @@ Format rules (your reply is read aloud by a voice):
 - For very recent events, say your information might not be fully up to date (unless you can search).
 - If you don't know something, say so honestly instead of guessing.
 - You're an original fictional AI character; if asked, say you're an AI. Never claim to be a real person.
-- Keep things appropriate for all ages, and politely decline harmful or explicit requests.`;
+- Keep things appropriate for all ages, and politely decline harmful or explicit requests.
+- Tags in square brackets (mood, remember, score, action) are read by the website and hidden from the user.`;
 
 const PERSONAS = {
   kaito: `You are Kaito Hayabusa, an upbeat, big-hearted adventurer and motivator.
@@ -92,6 +93,31 @@ user's last message, or says it was perfect. Then add a line starting with "Mean
 your {lang} reply. Do not use the [score] tag in this mode.`,
 };
 
+// ---------------- actions (assistant) ----------------
+// In normal chat, characters can also DO things for the user. They never act directly:
+// they add an [action: {...}] tag, and the website shows a card with a button the user
+// presses to confirm (open WhatsApp with the message ready, add a calendar event, etc.).
+
+const ACTIONS_RULE = `Actions: you can also help the user get things done. When the user clearly asks you to do one of the
+things below, reply with one or two short friendly sentences about what you've prepared, then put exactly ONE action
+tag at the very end of your reply, written as valid JSON on one line:
+- Reminder: [action: {"type":"reminder","text":"Finish the math notes","in_minutes":60}]
+  (use "in_minutes" for "in an hour"/"in 20 minutes", or "at":"YYYY-MM-DDTHH:MM" in the user's local time for a clock time)
+- Calendar event: [action: {"type":"calendar","title":"Study group","start":"YYYY-MM-DDTHH:MM","minutes":60,"details":"Library, room 2"}]
+  (for an all-day event use "date":"YYYY-MM-DD" instead of "start")
+- Message someone: [action: {"type":"message","app":"whatsapp","to":"Rahul","text":"Hey Rahul, I won't make it to class today."}]
+  ("app" is "whatsapp", "sms" or "email"; email also takes "subject"; "to" is the name the user used)
+- Shopping: [action: {"type":"shop","store":"amazon","query":"logitech m720 wireless mouse"}]
+  ("store" can be "amazon", "walmart", "target", "bestbuy" or "google"; write a precise product search)
+- Directions or places: [action: {"type":"map","query":"coffee shops near NJIT"}]
+- Web or video search: [action: {"type":"search","site":"google","query":"how to solve quadratic equations"}] ("site" can be "google" or "youtube")
+Rules for actions:
+- The user confirms every action with a button, so never claim it's already done. Say something like "Here it is, tap the button to send it."
+- Write messages in the user's own voice (first person), friendly and ready to send.
+- If something essential is missing (who to message, what time, which product), ask one short question instead of guessing.
+- Never invent phone numbers, email addresses, prices or product links.
+- Only add an action tag when the user asks you to do something. Ordinary questions get ordinary answers.`;
+
 const MEMORY_RULE = `Memory: if the user shares a lasting fact worth remembering for future chats (their name, goals,
 school or job, upcoming exams, interests, preferences), add ONE tag at the very end of your reply like
 [remember: The user is preparing for a data structures exam in December]. Only for genuinely useful facts,
@@ -106,6 +132,10 @@ export function buildSystem(character, opts = {}) {
     if (mem.goals) lines.push(`- Their goals: ${mem.goals}`);
     for (const f of mem.facts || []) lines.push(`- ${f}`);
     parts.push(`What you remember about the user from earlier visits (use it naturally, don't recite it):\n${lines.join('\n')}`);
+  }
+  if (!opts.mode || opts.mode === 'chat') {
+    parts.push(ACTIONS_RULE);
+    if (opts.now) parts.push(`The user's current local date and time: ${opts.now}${opts.tz ? ` (time zone ${opts.tz})` : ''}. Use it to work out dates and times.`);
   }
   const mode = MODES[opts.mode || 'chat'];
   if (mode) {
@@ -166,6 +196,8 @@ function validate(body) {
   if (body.mode !== undefined && !(body.mode in MODES)) return 'Unknown mode.';
   if (body.lang !== undefined && !LANGS.includes(body.lang)) return 'Unsupported language.';
   if (body.topic !== undefined && (typeof body.topic !== 'string' || body.topic.length > 120)) return 'Topic must be a short string.';
+  if (body.now !== undefined && (typeof body.now !== 'string' || body.now.length > 80)) return 'now must be a short string.';
+  if (body.tz !== undefined && (typeof body.tz !== 'string' || body.tz.length > 60)) return 'tz must be a short string.';
   const mem = body.memory;
   if (mem !== undefined) {
     if (typeof mem !== 'object' || mem === null) return 'memory must be an object.';
@@ -250,7 +282,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors.headers });
-    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 3, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
+    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 4, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
     if (request.method !== 'POST' || !['/chat', '/'].includes(url.pathname)) return json({ error: 'Not found' }, 404, cors.headers);
     if (!cors.ok) return json({ error: 'This website is not allowed to use this server.' }, 403, cors.headers);
     if (!env.GEMINI_API_KEY && !env.AI) return json({ error: 'Server has no AI connected. Add a Workers AI binding named AI (or a GEMINI_API_KEY secret).' }, 500, cors.headers);
@@ -263,7 +295,7 @@ export default {
     const problem = validate(body);
     if (problem) return json({ error: problem }, 400, cors.headers);
 
-    const system = buildSystem(body.character, { mode: body.mode, topic: body.topic, lang: body.lang, memory: body.memory });
+    const system = buildSystem(body.character, { mode: body.mode, topic: body.topic, lang: body.lang, memory: body.memory, now: body.now, tz: body.tz });
 
     // 1) Gemini, if a key is set
     if (env.GEMINI_API_KEY) {

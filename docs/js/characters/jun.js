@@ -38,7 +38,7 @@ export function build() {
   const tufts = hairSpiky(h, R, { mat: m.hair, hi: m.hairHi, count: 22, len: 0.11, sideburns: false });
 
   return new Rig({
-    root, head: h, face, restMouth: 0.55,
+    root, head: h, face, arms: { L, R: Rt }, restMouth: 0.55,
     tick(t, dt, rig) {
       // easy-going bounce on the toes; arms swing a little when talking
       root.position.y = rig.rootBaseY + Math.abs(Math.sin(t * 1.6)) * 0.008;

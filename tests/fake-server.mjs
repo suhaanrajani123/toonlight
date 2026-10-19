@@ -11,6 +11,10 @@ globalThis.fetch = async (url, init) => {
   if (/QUIZ ME/.test(sys)) text = `[happy] Question 1: What does LIFO stand for?\nA. Last In First Out\nB. Least In Full Out [score: 1/1]`;
   if (/LANGUAGE PRACTICE in (\w+)/.test(sys)) text = `[happy] ¡Hola! ¿Cómo estás?\nCorrection: Perfect!\nMeaning: Hi! How are you?`;
   if (/my name is (\w+)/i.test(last)) text = `[happy] Nice to meet you, ${last.match(/my name is (\w+)/i)[1]}! [remember: The user's name is ${last.match(/my name is (\w+)/i)[1]}]`;
+  if (/remind me/i.test(last)) text = `[happy] You got it, tap the button to set it. [action: {"type":"reminder","text":"Finish the math notes","in_minutes":60}]`;
+  if (/whatsapp/i.test(last)) text = `[neutral] Here's a message ready to go. [action: {"type":"message","app":"whatsapp","to":"Rahul","text":"Hey Rahul, I won't make it to class today."}]`;
+  if (/amazon/i.test(last)) text = `[happy] Here are some options. [action: {"type":"shop","store":"amazon","query":"logitech wireless mouse"}]`;
+  if (/calendar/i.test(last)) text = `[happy] Added below, just confirm it. [action: {"type":"calendar","title":"Study session","start":"2026-10-23T16:00","minutes":90}]`;
   return Response.json({ candidates: [{ content: { parts: [{ text }] },
     groundingMetadata: { groundingChunks: [{ web: { uri: 'https://www.nasa.gov/', title: 'nasa.gov' } }] } }] });
 };

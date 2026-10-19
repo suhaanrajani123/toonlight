@@ -35,7 +35,7 @@ export function build() {
   const locks = hairLong(h, R, { mat: m.hair, hi: m.hairHi, length: 0.78, bangs: 'center', volume: 1.12 });
 
   return new Rig({
-    root, head: h, face,
+    root, head: h, face, arms: { L, R: Rt },
     tick(t, dt, rig) {
       // relaxed lean with a slow sway; hair drifts a little
       root.rotation.z = 0.025 + Math.sin(t * 0.8) * 0.01;

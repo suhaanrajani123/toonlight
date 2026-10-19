@@ -67,8 +67,16 @@ export function arm(s, o) {
   const h = new THREE.Group();
   h.position.y = -0.33;
   elbow.add(h);
-  h.add(hand(s, { skin, glove: o.glove, style: o.handStyle }));
-  return { shoulder, elbow, hand: h };
+  // the hand's own style, plus a hidden open hand that gestures (waving, explaining) switch to
+  const main = hand(s, { skin, glove: o.glove, style: o.handStyle });
+  h.add(main);
+  let open = null;
+  if (o.handStyle && o.handStyle !== 'open') {
+    open = hand(s, { skin, glove: o.glove, style: 'open' });
+    open.visible = false;
+    h.add(open);
+  }
+  return { shoulder, elbow, hand: h, palm: { main, open } };
 }
 
 // Poses for the LEFT arm (s = +1) as [shoulder xyz, elbow xyz, hand xyz]; mirrored for the right.

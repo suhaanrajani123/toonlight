@@ -121,7 +121,7 @@ export function build() {
   h.add(part(torus(R * 1.07, 0.02), m.leather, { pos: [0, R * 0.5, -R * 0.06], rot: [Math.PI / 2 + 0.25, 0, 0] })); // goggle strap
 
   return new Rig({
-    root, head: h, face, restMouth: 0.25,
+    root, head: h, face, arms: { L, R: Rt }, restMouth: 0.25,
     tick(t, dt, rig) {
       tail.rotation.y = Math.sin(t * 1.5) * 0.25;
       tail.rotation.z = Math.sin(t * 2.1) * 0.06;

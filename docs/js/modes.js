@@ -11,7 +11,7 @@ export const langCode = (name) => LANGS.find((l) => l.name === name)?.code || 'e
 
 export const MODES = [
   {
-    id: 'chat', label: 'Just chat', note: 'Ask anything, get advice, or just hang out.',
+    id: 'chat', label: 'Just chat', note: 'Ask anything, or have them do things for you: reminders, calendar events, messages and shopping.',
     field: null, start: null,
   },
   {

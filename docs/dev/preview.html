@@ -16,5 +16,10 @@ stage.show(rig);
 stage.entrance = 1; rig.root.scale.setScalar(1);
 const m = +(q.get('mouth') || 0); stage.mouthLevel = () => m;
 if (q.get('turn')) rig.headBase.y = +q.get('turn');
+// ?g=wave plays a gesture (?g=think holds the thinking pose)
+if (q.get('g') === 'think') rig.thinking = true;
+else if (q.get('g')) rig.gesture(q.get('g'));
+// ?ga=0.9 jumps the gesture to that many seconds in (screenshots on slow machines)
+if (q.get('ga')) setTimeout(() => rig.gestures.active.forEach((g) => (g.age = +q.get('ga'))), 300);
 window.__ready = true;
 </script></body></html>

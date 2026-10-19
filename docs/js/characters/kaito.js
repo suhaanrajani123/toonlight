@@ -25,7 +25,7 @@ export function build() {
   jacket(root, { mat: m.jacket, collar: 'shirt', collarMat: m.jacketLight, pockets: m.jacketDark });
   backpack(root, { mat: m.pack, strap: m.leatherDark, roll: m.roll, flap: m.leather });
   const pendant = necklace(root, { cord: m.leatherDark, pendant: m.silver });
-  const { R: Rt } = attachArms(root, { skin: m.skin, sleeveMat: m.jacket, sleeve: 'rolled', cuffMat: m.jacketLight, bracer: m.leather }, { left: 'hip', right: 'open' });
+  const { L, R: Rt } = attachArms(root, { skin: m.skin, sleeveMat: m.jacket, sleeve: 'rolled', cuffMat: m.jacketLight, bracer: m.leather }, { left: 'hip', right: 'open' });
 
   const { head: h, face, R } = head(root, {
     skin: m.skin, stubble: toon(0x8a5d45, { rough: 0.95, sheen: 0.2 }),
@@ -34,7 +34,7 @@ export function build() {
   const tufts = hairSpiky(h, R, { mat: m.hair, hi: m.hairHi });
 
   return new Rig({
-    root, head: h, face, restMouth: 0.5,
+    root, head: h, face, arms: { L, R: Rt }, restMouth: 0.5,
     tick(t, dt, rig) {
       root.rotation.y = Math.sin(t * 0.7) * 0.04;
       const g = rig.speaking ? Math.sin(t * 3.1) * 0.18 + rig.mouthOpen * 0.12 : Math.sin(t * 1.2) * 0.03;

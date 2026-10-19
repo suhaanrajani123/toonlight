@@ -127,4 +127,19 @@ for (const bad of [{ mode: 'hack' }, { lang: 'Klingon' }, { topic: 'x'.repeat(20
   res = await worker.fetch(req({ ...good, ...bad }), { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
   assert.equal(res.status, 400, JSON.stringify(bad).slice(0, 40));
 }
-console.log('ok  modes + memory\nall worker tests passed');
+console.log('ok  modes + memory');
+
+// 9. assistant actions: chat mode gets the action rules and the user's clock; practice modes don't
+aiCalls.length = 0;
+res = await worker.fetch(req({ ...good, now: 'Monday, October 19, 2026 at 6:50 PM (ISO 2026-10-19T18:50)', tz: 'America/New_York' }), { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
+assert.equal(res.status, 200);
+let sys9 = aiCalls[0].input.messages[0].content;
+assert.match(sys9, /\[action: \{"type":"reminder"/);
+assert.match(sys9, /2026-10-19T18:50.*America\/New_York/);
+res = await worker.fetch(req({ ...good, mode: 'quiz', topic: 'graphs', now: 'x' }), { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
+assert.doesNotMatch(aiCalls.at(-1).input.messages[0].content, /\[action:/);
+for (const bad of [{ now: 'x'.repeat(100) }, { tz: 5 }]) {
+  res = await worker.fetch(req({ ...good, ...bad }), { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
+  assert.equal(res.status, 400, JSON.stringify(bad).slice(0, 40));
+}
+console.log('ok  actions\nall worker tests passed');
