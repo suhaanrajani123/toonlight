@@ -299,8 +299,8 @@ async function callGemini(env, system, contents, withSearch) {
 // Agent mode is only for signed-in users. The site sends the Supabase session token; we ask
 // Supabase whether it's real. Good answers are remembered for 5 minutes.
 
-const DEFAULT_SUPABASE_URL = '__SUPABASE_URL__';
-const DEFAULT_SUPABASE_KEY = '__SUPABASE_KEY__';
+const DEFAULT_SUPABASE_URL = 'https://uxanvmamhscakggttzvr.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_2v14fZCPaBFKG0itNmZdkQ_4IBPX7DE'; // publishable key: safe to share
 const verified = new Map();
 
 export async function verifyUser(env, token) {

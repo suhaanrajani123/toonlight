@@ -12,8 +12,8 @@ export const CONFIG = {
   // Supabase project for sign-in (Agent mode). Both values are public by design: the
   // "publishable"/anon key only allows what your project's settings allow.
   // Find them in Supabase → Project Settings → API. Leave empty to hide sign-in.
-  SUPABASE_URL: '',
-  SUPABASE_KEY: '',
+  SUPABASE_URL: 'https://uxanvmamhscakggttzvr.supabase.co',
+  SUPABASE_KEY: 'sb_publishable_2v14fZCPaBFKG0itNmZdkQ_4IBPX7DE',
 
   // How many past messages to send with each question (more = better memory, slower).
   HISTORY_TURNS: 12,
