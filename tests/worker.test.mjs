@@ -129,17 +129,62 @@ for (const bad of [{ mode: 'hack' }, { lang: 'Klingon' }, { topic: 'x'.repeat(20
 }
 console.log('ok  modes + memory');
 
-// 9. assistant actions: chat mode gets the action rules and the user's clock; practice modes don't
+// 9. Agent mode: needs a real Supabase sign-in; then gets the action rules and the user's clock
+const supa = { SUPABASE_URL: 'https://proj.supabase.co', SUPABASE_KEY: 'sb_publishable_test' };
+const realFetch = globalThis.fetch;
+const authCalls = [];
+globalThis.fetch = async (url, init) => {
+  if (String(url).startsWith('https://proj.supabase.co/auth/v1/user')) {
+    authCalls.push(init.headers);
+    return init.headers.Authorization === 'Bearer good-token'
+      ? Response.json({ id: 'u1', email: 'me@example.com' })
+      : Response.json({ msg: 'invalid JWT' }, { status: 401 });
+  }
+  return realFetch(url, init);
+};
+const agentEnv = { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS, ...supa };
 aiCalls.length = 0;
-res = await worker.fetch(req({ ...good, now: 'Monday, October 19, 2026 at 6:50 PM (ISO 2026-10-19T18:50)', tz: 'America/New_York' }), { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
+res = await worker.fetch(req({ ...good, mode: 'agent' }), agentEnv);
+assert.equal(res.status, 401, 'agent without sign-in is refused');
+assert.equal((await res.json()).code, 'auth');
+res = await worker.fetch(req({ ...good, mode: 'agent', auth: 'forged' }), agentEnv);
+assert.equal(res.status, 401, 'agent with a fake token is refused');
+assert.equal(aiCalls.length, 0, 'AI never called for refused agent requests');
+res = await worker.fetch(req({ ...good, mode: 'agent', auth: 'good-token', now: 'Monday, October 19, 2026 at 6:50 PM (ISO 2026-10-19T18:50)', tz: 'America/New_York' }), agentEnv);
 assert.equal(res.status, 200);
-let sys9 = aiCalls[0].input.messages[0].content;
+let sys9 = aiCalls.at(-1).input.messages[0].content;
+assert.match(sys9, /MODE: AGENT/);
 assert.match(sys9, /\[action: \{"type":"reminder"/);
 assert.match(sys9, /2026-10-19T18:50.*America\/New_York/);
-res = await worker.fetch(req({ ...good, mode: 'quiz', topic: 'graphs', now: 'x' }), { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
-assert.doesNotMatch(aiCalls.at(-1).input.messages[0].content, /\[action:/);
-for (const bad of [{ now: 'x'.repeat(100) }, { tz: 5 }]) {
-  res = await worker.fetch(req({ ...good, ...bad }), { AI, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS });
+assert.equal(authCalls.at(-1).apikey, 'sb_publishable_test');
+const n = authCalls.length;
+await worker.fetch(req({ ...good, mode: 'agent', auth: 'good-token' }), agentEnv);
+assert.equal(authCalls.length, n, 'verified sign-ins are cached');
+res = await worker.fetch(req({ ...good }), agentEnv);
+assert.doesNotMatch(aiCalls.at(-1).input.messages[0].content, /\[action:/, 'plain chat has no actions');
+for (const bad of [{ now: 'x'.repeat(100) }, { tz: 5 }, { auth: 5 }]) {
+  res = await worker.fetch(req({ ...good, ...bad }), agentEnv);
   assert.equal(res.status, 400, JSON.stringify(bad).slice(0, 40));
 }
-console.log('ok  actions\nall worker tests passed');
+console.log('ok  agent mode + sign-in');
+
+// 10. quiz: structured questions, difficulty, style, no repeats, documents
+res = await worker.fetch(req({ ...good, mode: 'quiz', topic: 'graphs', difficulty: 'hard', style: 'scenario', avoid: ['What does BFS stand for?'] }), agentEnv);
+assert.equal(res.status, 200);
+let sys10 = aiCalls.at(-1).input.messages[0].content;
+assert.match(sys10, /\[quiz: \{"q"/);
+assert.match(sys10, /Difficulty: hard/);
+assert.match(sys10, /Style for this question: scenario/);
+assert.match(sys10, /do NOT repeat[\s\S]*What does BFS stand for\?/);
+res = await worker.fetch(req({ ...good, mode: 'quiz', doc: { name: 'notes.pdf', parts: [{ text: 'A stack is LIFO.', where: 'page 3' }] } }), agentEnv);
+sys10 = aiCalls.at(-1).input.messages[0].content;
+assert.match(sys10, /ONLY from the passage below[\s\S]*\[Part 1, page 3\]\nA stack is LIFO\./);
+assert.match(sys10, /QUIZ ME .* on: the document "notes\.pdf"/);
+res = await worker.fetch(req({ ...good, doc: { name: 'notes.pdf', parts: [{ text: 'Queues are FIFO.' }] } }), agentEnv);
+assert.match(aiCalls.at(-1).input.messages[0].content, /you have studied it[\s\S]*Queues are FIFO/);
+for (const bad of [{ difficulty: 'insane' }, { style: 'riddle' }, { avoid: 'x' }, { avoid: Array(61).fill('q') }, { doc: { name: 'x', parts: [] } }, { doc: { name: 'x', parts: [{ text: 'y'.repeat(2001) }] } }, { doc: { name: 'x', parts: Array(7).fill({ text: 'y'.repeat(1900) }) } }]) {
+  res = await worker.fetch(req({ ...good, ...bad }), agentEnv);
+  assert.equal(res.status, 400, JSON.stringify(bad).slice(0, 50));
+}
+globalThis.fetch = realFetch;
+console.log('ok  quiz + documents\nall worker tests passed');

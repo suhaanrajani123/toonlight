@@ -4,12 +4,15 @@
 
 | Mode | What happens |
 |---|---|
-| **Quiz me** | Exam practice on any topic: one question at a time, graded, with a running score |
+| **Quiz me** | Exam practice on any topic or on your own document, at Easy, Medium or Hard. Tap an answer; the site checks it and keeps score. Answer order is shuffled and asked questions are remembered, so quizzes don't repeat |
 | **Mock interview** | A realistic interviewer for the role you choose; every answer gets a rating out of 10 and a tip |
 | **Language practice** | Chat in Spanish, French, Japanese, Hindi and more. They reply simply, correct your mistakes and speak in that language |
-| **Just chat** | Advice, explanations, recipes, ideas, and an assistant that does things for you (below) |
+| **Just chat** | Advice, explanations, recipes, ideas, or questions about a document you uploaded |
+| **Agent** (sign in) | An assistant that does things for you (below) |
 
-**They can do things for you, too.** In *Just chat*, ask any character:
+**Study your own documents.** Press the paperclip next to the message box and pick a PDF, Word (.docx), PowerPoint (.pptx) or text file. It's read in your browser and kept there; for each question only the most relevant passages go to the AI, so long chapters work fine. Ask anything about it, or start *Quiz me* with **From my document** ticked to get questions written from different parts of it.
+
+**They can do things for you, too.** Sign in (free account), switch to **Agent**, and ask any character:
 
 | You say | You get |
 |---|---|
@@ -126,6 +129,14 @@ Only use models you made yourself or whose license allows it, and **never** char
 
 Large files make the site slow to load. Aim for under 20 MB per model (Blender's glTF export has a *Draco compression* option).
 
+## Sign-in (Supabase, free)
+
+Agent mode needs an account. Toonlight uses [Supabase](https://supabase.com) Auth with email and password:
+
+1. Create a free Supabase project, then copy its **Project URL** and **publishable (anon) key** from *Project Settings → API* into `docs/js/config.js` (`SUPABASE_URL`, `SUPABASE_KEY`). Both are safe to publish.
+2. Put the same two values in `worker/worker.js` (`DEFAULT_SUPABASE_URL`, `DEFAULT_SUPABASE_KEY`) or as Worker variables `SUPABASE_URL` / `SUPABASE_KEY`. The Worker checks every Agent request with Supabase, so it can't be unlocked from the browser.
+3. In Supabase *Authentication → URL Configuration*, set the **Site URL** to your GitHub Pages address so confirmation and password-reset emails link back to the site.
+
 ## Project map
 
 ```
@@ -143,12 +154,15 @@ docs/                  ← the website (GitHub Pages serves this folder)
   js/chat.js           ← talks to the worker, saves chat history
   js/actions.js        ← reminders, calendar, messages, shopping cards
   js/gestures.js       ← waving, thinking, talking with hands
+  js/quiz.js           ← quiz tags, shuffling, answer checking, no-repeat memory
+  js/docs.js           ← reads PDF/Word/PowerPoint/text, finds the relevant passages
+  js/auth.js           ← Supabase sign-in
   js/vrm.js            ← loads your own .vrm / .glb models
   models/              ← put your model files here
   dev/                 ← preview.html (one character) and model-test.html (loader self-test)
-  vendor/              ← Three.js and three-vrm (MIT licensed), included so nothing breaks
+  vendor/              ← Three.js, three-vrm and pdf.js (open source), included so nothing breaks
 worker/worker.js       ← the AI server (personalities live here)
-tests/                 ← automated tests (node tests/worker.test.mjs)
+tests/                 ← automated tests (node tests/worker.test.mjs, node tests/units.test.mjs, python3 tests/e2e.py)
 ```
 
 ## Browser support

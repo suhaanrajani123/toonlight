@@ -6,10 +6,13 @@ import { Stage, portrait } from './stage.js';
 import { Voice } from './voice.js';
 import { Listener } from './listen.js';
 import { ask, isDemo, loadHistory, saveHistory, clearHistory } from './chat.js';
-import { MODES, LANGS, modeById, langCode } from './modes.js';
+import { MODES, LANGS, modeById, langCode, AGENT_PROMPTS } from './modes.js';
 import { loadMemory, saveMemory, remember, memoryPayload } from './memory.js';
 import { saveModel, getModel, removeModel } from './models.js';
 import { describe, loadContacts, saveContacts, loadReminders, saveReminders, when } from './actions.js';
+import { ACCEPT, addDoc, getDoc, listDocs, removeDoc, passagesFor, quizPassage } from './docs.js';
+import { letter, parseAnswer, askedBefore, rememberAsked, isRepeat, pickStyle } from './quiz.js';
+import { authConfigured, getSession, signIn, signUp, signOut, resetPassword, setNewPassword, handleRedirect, onAuthChange } from './auth.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -42,7 +45,13 @@ const practice = {                        // what we're practicing (shared acros
   mode: read('toonlight:mode', 'chat'),
   topic: '',
   lang: read('toonlight:lang', 'Spanish'),
+  difficulty: read('toonlight:difficulty', 'medium'),
+  useDoc: read('toonlight:usedoc', 'on') === 'on',
 };
+let activeDoc = null;                     // the document being studied (docs.js)
+let signedIn = false;                     // Supabase session present (auth.js)
+let lastStyle = null;                     // last quiz question style, so the next one differs
+const quizCards = new WeakMap();          // quiz entry → its card on screen
 if (!MODES.some((m) => m.id === practice.mode)) practice.mode = 'chat';
 practice.topic = read(`toonlight:topic:${practice.mode}`, '');
 
@@ -110,7 +119,7 @@ async function select(id) {
   current = c;
 
   document.documentElement.style.setProperty('--tint', c.theme.tint);
-  stage.setTheme(c.theme.tint, document.documentElement.dataset.theme === 'dark');
+  stage.setTheme(c.theme.tint, document.documentElement.dataset.theme !== 'light', document.documentElement.dataset.theme);
   els.name.textContent = c.name;
   els.kind.textContent = `${c.kind} character`;
   els.tagline.textContent = c.tagline;
@@ -132,7 +141,11 @@ async function select(id) {
 
 function updateTitles() {
   const m = modeById(practice.mode);
-  const detail = practice.mode === 'language' ? `${m.label} (${practice.lang})` : practice.mode !== 'chat' && practice.topic ? `${m.label}: ${practice.topic}` : m.label;
+  const quizDoc = practice.mode === 'quiz' && practice.useDoc && activeDoc;
+  const detail = practice.mode === 'language' ? `${m.label} (${practice.lang})`
+    : quizDoc ? `${m.label}: ${activeDoc.name} (${practice.difficulty})`
+    : practice.mode === 'quiz' && practice.topic ? `${m.label}: ${practice.topic} (${practice.difficulty})`
+    : practice.mode !== 'chat' && practice.topic ? `${m.label}: ${practice.topic}` : m.label;
   els.chatMode.textContent = detail;
   els.windowTitle.textContent = `${current.name}, ${detail.charAt(0).toLowerCase()}${detail.slice(1)}`;
   els.input.placeholder = practice.mode === 'language' ? `Write to ${current.short} in ${practice.lang}…` : `Message ${current.short}…`;
@@ -180,6 +193,13 @@ function setMode(id, { quiet } = {}) {
       els.setupField.value = practice.topic;
     }
   }
+  const isQuiz = !!m.field?.quiz;
+  $('mode-diff').hidden = !isQuiz;
+  $('mode-diff').value = practice.difficulty;
+  $('mode-usedoc-wrap').hidden = !(isQuiz && activeDoc);
+  $('mode-usedoc').checked = practice.useDoc;
+  if (isQuiz && activeDoc && practice.useDoc) els.setupField.placeholder = 'Optional: a part to focus on';
+  renderDocBar();
   if (current && !quiet) {
     voice.stop();
     updateTitles();
@@ -198,18 +218,29 @@ els.setup.addEventListener('submit', (e) => {
     els.setupField.value = practice.topic;
     write(`toonlight:topic:${practice.mode}`, practice.topic);
   }
+  if (m.field.quiz) {
+    practice.difficulty = $('mode-diff').value;
+    practice.useDoc = $('mode-usedoc').checked;
+    write('toonlight:difficulty', practice.difficulty);
+    write('toonlight:usedoc', practice.useDoc ? 'on' : 'off');
+  }
   updateTitles();
   // a fresh session for the new topic/language
   clearHistory(current.id, practice.mode);
   log = [];
   renderMessages();
-  send(m.start(practice));
+  send(m.start({ ...practice, useDoc: practice.useDoc && !!activeDoc, docName: activeDoc?.name }));
 });
 
-function showScore(score) {
-  if (!score || practice.mode !== 'quiz') return;
-  // only after you've actually answered something (the AI sometimes tags its first question)
-  if (log.filter((m) => m.role === 'user').length < 2 || score.total < 1) return;
+// The site keeps the quiz score itself, from the answers you picked.
+function quizScore(list = log) {
+  let right = 0, total = 0;
+  for (const m of list) if (m.quiz && m.quiz.picked != null) { total++; if (m.quiz.picked === m.quiz.answer) right++; }
+  return { right, total };
+}
+function showScore() {
+  const score = quizScore();
+  if (practice.mode !== 'quiz' || !score.total) { els.score.hidden = true; return; }
   els.score.hidden = false;
   els.scoreNum.textContent = `${score.right}/${score.total}`;
   els.score.classList.remove('bump');
@@ -222,13 +253,17 @@ function showScore(score) {
 function loadConversation() {
   log = loadHistory(current.id, practice.mode);
   els.score.hidden = true;
-  const last = [...log].reverse().find((m) => m.score);
-  if (last) showScore(last.score);
+  showScore();
   renderMessages();
 }
 
 function greeting() {
   const m = modeById(practice.mode);
+  if (practice.mode === 'agent') {
+    return signedIn
+      ? `${current.greeting} Agent mode is on: I can set reminders, add calendar events, write messages for WhatsApp, text or email, and find things to buy. You confirm everything with a button.`
+      : `${current.greeting} Agent mode lets me do things for you, like reminders, calendar events and messages. Sign in first to unlock it.`;
+  }
   if (practice.mode !== 'chat') {
     return practice.mode === 'language'
       ? `${current.greeting} Pick a language below and press Start, and I'll chat with you in it.`
@@ -237,7 +272,7 @@ function greeting() {
   return memory.name ? `${current.greeting} Good to see you, ${memory.name}!` : current.greeting;
 }
 
-function bubble(role, text, { sources = [], who, fresh, memo, actions, made } = {}) {
+function bubble(role, text, { sources = [], who, fresh, memo, actions, made, entry } = {}) {
   const li = document.createElement('li');
   li.className = `msg ${role === 'user' ? 'user' : role === 'system' ? 'system' : 'bot'}${fresh ? ' new' : ''}`;
   if (role === 'assistant' && who) {
@@ -262,6 +297,7 @@ function bubble(role, text, { sources = [], who, fresh, memo, actions, made } = 
     l.addEventListener('click', () => listen(l, text));
     li.append(l);
   }
+  if (entry?.quiz) li.append(quizCard(entry));
   for (const a of actions || []) {
     const card = actionCard(a, made);
     if (card) li.append(card);
@@ -296,14 +332,17 @@ function bubble(role, text, { sources = [], who, fresh, memo, actions, made } = 
 function renderMessages() {
   els.messages.replaceChildren();
   bubble('assistant', greeting(), { who: current.short });
-  for (const m of log) bubble(m.role, m.text, { sources: m.sources, who: current.short, memo: m.memo, actions: m.actions, made: m.made });
+  for (const m of log) bubble(m.role, m.shown || m.text, { sources: m.sources, who: current.short, memo: m.memo, actions: m.actions, made: m.made, entry: m });
+  if (practice.mode === 'agent' && !signedIn) els.messages.append(gateCard());
   renderSuggestions();
+  updateComposer();
 }
 
 function renderSuggestions() {
   els.suggest.replaceChildren();
-  if (log.length || practice.mode !== 'chat') return;
-  for (const q of current.prompts) {
+  const list = practice.mode === 'chat' ? current.prompts : practice.mode === 'agent' && signedIn ? AGENT_PROMPTS : [];
+  if (log.length) return;
+  for (const q of list) {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = q;
@@ -329,9 +368,18 @@ function spokenPart(text) {
   return { say: text.split(/\n?\s*(Correction|Meaning)\s*:/i)[0].trim(), lang: langCode(practice.lang) };
 }
 
-async function send(text) {
+async function send(text, { shown, quizAnswer = false } = {}) {
   text = text.trim();
   if (!text || busy) return;
+  // a typed "B" (or the option's words) while a quiz question is waiting = picking that option
+  if (practice.mode === 'quiz' && !quizAnswer) {
+    const open = [...log].reverse().find((m) => m.role === 'assistant' && m.quiz);
+    if (open && open.quiz.picked == null) {
+      const i = parseAnswer(text, open.quiz);
+      if (i !== null) { els.input.value = ''; autoGrow(); answerQuiz(open, i); return; }
+    }
+  }
+  if (practice.mode === 'agent' && !signedIn) { openAuth(); return; }
   busy = true;
   els.send.disabled = true;
   voice.stop();
@@ -339,9 +387,9 @@ async function send(text) {
 
   const c = current, mode = practice.mode;
   const rig = await rigFor(c);
-  log.push({ role: 'user', text });
+  log.push(shown ? { role: 'user', text, shown } : { role: 'user', text });
   saveHistory(c.id, mode, log);
-  bubble('user', text, { fresh: true });
+  bubble('user', shown || text, { fresh: true });
   els.input.value = '';
   autoGrow();
   els.suggest.replaceChildren();
@@ -354,19 +402,53 @@ async function send(text) {
   typing.querySelector('.bubble').innerHTML = '<span></span><span></span><span></span>';
 
   try {
-    const reply = await ask(c, log, { mode, topic: practice.topic, lang: practice.lang, memory: memoryPayload(memory) });
+    const ctx = { mode, topic: practice.topic, lang: practice.lang, memory: memoryPayload(memory) };
+    const quizDoc = mode === 'quiz' && practice.useDoc && activeDoc;
+    const qKey = quizDoc ? `doc:${activeDoc.id}` : `topic:${practice.topic || 'general'}`;
+    let used = null;
+    if (mode === 'agent') {
+      ctx.auth = (await getSession())?.access_token;
+      if (!ctx.auth) throw Object.assign(new Error('auth'), { status: 401, code: 'auth' });
+    }
+    if (mode === 'chat' && activeDoc) {
+      const prev = [...log].reverse().find((m) => m.role === 'assistant')?.text || '';
+      ctx.doc = { name: activeDoc.name, parts: passagesFor(activeDoc, text, prev.slice(0, 300)) };
+    }
+    if (mode === 'quiz') {
+      ctx.difficulty = practice.difficulty;
+      ctx.avoid = askedBefore(qKey);
+      if (quizDoc) {
+        used = JSON.parse(read(`toonlight:docused:${activeDoc.id}`, '[]'));
+        const pick = quizPassage(activeDoc, used, practice.topic);
+        used.push(pick.index);
+        ctx.doc = { name: activeDoc.name, parts: pick.parts };
+      }
+    }
+    let reply;
+    // in quizzes, if the AI repeats an old question anyway, ask once more in a different style
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (mode === 'quiz') ctx.style = lastStyle = pickStyle(lastStyle);
+      reply = await ask(c, log, ctx);
+      if (!(mode === 'quiz' && reply.quiz && isRepeat(qKey, reply.quiz.q))) break;
+    }
+    if (mode === 'quiz' && reply.quiz) {
+      rememberAsked(qKey, reply.quiz.q);
+      reply.quiz.level = practice.difficulty;
+      if (used) write(`toonlight:docused:${activeDoc.id}`, JSON.stringify(used.slice(-60)));
+    }
     const memo = [];
     for (const f of reply.remember || []) if (remember(memory, f)) memo.push(f);
     if (memo.length) { saveMemory(memory); renderMemory(); }
     const actions = reply.actions?.length ? reply.actions : undefined;
-    const entry = { role: 'assistant', text: reply.text || (actions ? 'Here you go:' : '…'), sources: reply.sources, memo, score: reply.score || undefined, actions, made: actions ? Date.now() : undefined };
+    const entry = { role: 'assistant', text: reply.text || (actions ? 'Here you go:' : reply.quiz ? (quizAnswer ? 'Next one:' : 'Here’s your question:') : '…'), sources: reply.sources, memo, actions, made: actions ? Date.now() : undefined };
+    if (reply.quiz) entry.quiz = reply.quiz;
     const target = current === c && practice.mode === mode ? log : loadHistory(c.id, mode);
     target.push(entry);
     saveHistory(c.id, mode, target);
     typing.remove();
     if (current !== c || practice.mode !== mode) return;
-    bubble('assistant', entry.text, { sources: entry.sources, who: c.short, fresh: true, memo, actions: entry.actions, made: entry.made });
-    showScore(reply.score);
+    bubble('assistant', entry.text, { sources: entry.sources, who: c.short, fresh: true, memo, actions: entry.actions, made: entry.made, entry });
+    showScore();
     rig.setMood(reply.mood);
     rig.thinking = false;
     const g = gestureFor(reply, entry.text);
@@ -374,14 +456,18 @@ async function send(text) {
     els.thought.hidden = true;
     busy = false;
     els.send.disabled = false;
-    const { say, lang } = spokenPart(entry.text);
+    const { say, lang } = spokenPart(entry.quiz ? `${entry.text} ${entry.quiz.q}` : entry.text);
     await voice.speak(say, c.voice, lang);
   } catch (e) {
     typing.remove();
     log.pop();
     saveHistory(c.id, mode, log);
-    bubble('system', ERRORS[e.status] || `The AI server had a hiccup (${e.message}). Try again in a moment.`);
-    els.input.value = text;
+    if (e.code === 'auth') {
+      if (e.status === 401) await signOut(); // the sign-in expired or was rejected
+      bubble('system', 'Please sign in again to use Agent mode.');
+      openAuth();
+    } else bubble('system', ERRORS[e.status] || `The AI server had a hiccup (${e.message}). Try again in a moment.`);
+    if (!quizAnswer) els.input.value = text;
     rig.setMood('sad');
   } finally {
     rig.thinking = false;
@@ -391,6 +477,252 @@ async function send(text) {
     setTimeout(() => !busy && !voice.speaking && rig.setMood('neutral'), 3500);
   }
 }
+
+// ---------- quiz cards ----------
+
+function quizCard(entry) {
+  const q = entry.quiz;
+  const card = document.createElement('div');
+  card.className = 'quiz';
+  const h = document.createElement('p');
+  h.className = 'quiz-q';
+  h.textContent = q.q;
+  const ul = document.createElement('ul');
+  ul.className = 'quiz-opts';
+  const buttons = q.options.map((o, i) => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'quiz-opt';
+    b.innerHTML = '<b></b><span></span>';
+    b.firstChild.textContent = letter(i);
+    b.lastChild.textContent = o;
+    b.addEventListener('click', () => answerQuiz(entry, i));
+    li.append(b);
+    ul.append(li);
+    return b;
+  });
+  const result = document.createElement('div');
+  result.className = 'quiz-result';
+  result.setAttribute('aria-live', 'polite');
+  card.append(h, ul, result);
+  if (q.level) {
+    const meta = document.createElement('p');
+    meta.className = 'quiz-meta';
+    meta.textContent = `${q.level[0].toUpperCase()}${q.level.slice(1)} · type a letter or tap an answer`;
+    card.append(meta);
+  }
+  const paint = () => {
+    if (q.picked == null) return;
+    buttons.forEach((b, i) => {
+      b.disabled = true;
+      if (i === q.answer) b.classList.add('right');
+      else if (i === q.picked) b.classList.add('wrong');
+    });
+    const ok = q.picked === q.answer;
+    result.replaceChildren();
+    const s = document.createElement('strong');
+    s.textContent = ok ? 'Correct!' : `Not quite. The answer is ${letter(q.answer)}.`;
+    const ex = document.createElement('span');
+    ex.textContent = q.explain || '';
+    result.append(s, ex);
+  };
+  paint();
+  quizCards.set(entry, paint);
+  return card;
+}
+
+// You picked option i: the site checks it, updates the score, then asks for the next question.
+async function answerQuiz(entry, i) {
+  const q = entry.quiz;
+  if (busy || q.picked != null) return;
+  q.picked = i;
+  saveHistory(current.id, practice.mode, log);
+  quizCards.get(entry)?.();
+  showScore();
+  const ok = i === q.answer;
+  const rig = await rigFor(current);
+  rig.setMood(ok ? 'happy' : 'sad');
+  rig.gesture?.(ok ? 'tada' : 'shrug');
+  const verdict = ok ? 'correct' : `wrong; the right answer was ${letter(q.answer)}. ${q.options[q.answer]}`;
+  send(`My answer: ${letter(i)}. ${q.options[i]} (${verdict}). Next question, please.`, { shown: `${letter(i)}. ${q.options[i]}`, quizAnswer: true });
+}
+
+// ---------- documents ----------
+
+function renderDocBar() {
+  const show = !!activeDoc && (practice.mode === 'chat' || (practice.mode === 'quiz' && practice.useDoc));
+  $('doc-bar').hidden = !show;
+  if (activeDoc) $('doc-name').textContent = `Studying: ${activeDoc.name}`;
+}
+
+async function useDoc(doc) {
+  activeDoc = doc;
+  write('toonlight:doc', doc ? doc.id : '');
+  renderDocBar();
+  if (current) { setMode(practice.mode, { quiet: true }); updateTitles(); }
+}
+
+$('doc-file').accept = ACCEPT;
+$('doc-file').addEventListener('change', async () => {
+  const f = $('doc-file').files[0];
+  $('doc-file').value = '';
+  if (!f) return;
+  $('attach').classList.add('busy');
+  notice(`Reading ${f.name}…`);
+  try {
+    const doc = await addDoc(f, (pct) => notice(`Reading ${f.name}… ${pct}%`));
+    notice('');
+    if (practice.mode !== 'chat' && practice.mode !== 'quiz') setMode('chat');
+    await useDoc(doc);
+    const where = doc.pages > 1 ? ` (${doc.pages} ${/\.pptx$/i.test(doc.name) ? 'slides' : 'pages'})` : '';
+    bubble('assistant', `I've studied "${doc.name}"${where}. Ask me anything about it, or go to Quiz me and tick "From my document" to get quizzed on it.`, { who: current.short, fresh: true });
+    const rig = await rigFor(current);
+    rig.setMood('happy');
+    rig.gesture?.('tada');
+    renderDocs();
+  } catch (e) {
+    console.warn(e);
+    notice(e.message || `Couldn't read ${f.name}.`);
+  } finally {
+    $('attach').classList.remove('busy');
+  }
+});
+$('doc-off').addEventListener('click', () => useDoc(null));
+
+async function renderDocs() {
+  const list = $('docs-list'), docs = await listDocs();
+  list.replaceChildren();
+  for (const d of docs) {
+    const li = document.createElement('li');
+    const s = document.createElement('span');
+    s.textContent = `${d.name} · ${d.size > 1048576 ? `${(d.size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(d.size / 1024))} KB`}`;
+    const use = document.createElement('button');
+    use.type = 'button';
+    use.className = 'use';
+    const on = activeDoc?.id === d.id;
+    use.textContent = on ? 'In use' : 'Use';
+    use.disabled = on;
+    use.addEventListener('click', async () => { await useDoc(await getDoc(d.id)); renderDocs(); });
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '×';
+    x.setAttribute('aria-label', `Delete ${d.name}`);
+    x.addEventListener('click', async () => {
+      await removeDoc(d.id);
+      if (activeDoc?.id === d.id) await useDoc(null);
+      renderDocs();
+    });
+    li.append(s, use, x);
+    list.append(li);
+  }
+  $('docs-empty').hidden = docs.length > 0;
+}
+
+// ---------- sign in (Supabase) & Agent mode ----------
+
+function gateCard() {
+  const li = document.createElement('li');
+  li.className = 'msg system';
+  const g = document.createElement('div');
+  g.className = 'gate';
+  const h = document.createElement('h3');
+  h.textContent = 'Sign in to use Agent mode';
+  const p = document.createElement('p');
+  p.textContent = authConfigured()
+    ? 'Agent mode can set reminders, add calendar events, write messages and find things to buy. It needs a free account so only you can use it.'
+    : 'Sign-in isn’t set up on this site yet.';
+  g.append(h, p);
+  if (authConfigured()) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn btn-small btn-accent';
+    b.textContent = 'Sign in or create an account';
+    b.addEventListener('click', () => openAuth());
+    g.append(b);
+  }
+  li.append(g);
+  return li;
+}
+
+function updateComposer() {
+  const locked = practice.mode === 'agent' && !signedIn;
+  els.input.disabled = locked;
+  els.send.disabled = locked || busy;
+  els.input.placeholder = locked ? 'Sign in to use Agent mode' : els.input.placeholder.replace('Sign in to use Agent mode', `Message ${current?.short || ''}…`);
+}
+
+let authState = 'signin';
+function setAuthState(st, msg = '', err = false) {
+  authState = st;
+  const t = { signin: 'Sign in', signup: 'Create your account', forgot: 'Reset your password', reset: 'Choose a new password' }[st];
+  $('auth-title').textContent = t;
+  $('auth-submit').textContent = { signin: 'Sign in', signup: 'Create account', forgot: 'Send reset link', reset: 'Save password' }[st];
+  $('auth-sub').textContent = st === 'forgot' ? 'We’ll email you a link to choose a new password.'
+    : st === 'reset' ? 'Type a new password for your account.'
+    : 'Sign in to unlock Agent mode: reminders, calendar events, messages and shopping.';
+  $('auth-email').closest('.field').hidden = st === 'reset';
+  $('auth-email').required = st !== 'reset';
+  $('auth-pass-wrap').hidden = st === 'forgot';
+  $('auth-pass').required = st !== 'forgot';
+  $('auth-pass').autocomplete = st === 'signin' ? 'current-password' : 'new-password';
+  $('auth-switch').textContent = st === 'signin' ? 'New here? Create an account' : 'Have an account? Sign in';
+  $('auth-forgot').hidden = st !== 'signin';
+  const m = $('auth-msg');
+  m.textContent = msg;
+  m.classList.toggle('err', err);
+}
+
+function openAuth(state) {
+  els.help.hidden = true;
+  $('auth').hidden = false;
+  $('auth-out').hidden = signedIn && state !== 'reset';
+  $('auth-in').hidden = !signedIn || state === 'reset';
+  if (!signedIn || state === 'reset') setAuthState(state || 'signin');
+  setTimeout(() => (signedIn && state !== 'reset' ? $('auth-agent') : $(state === 'reset' ? 'auth-pass' : 'auth-email')).focus(), 30);
+}
+const closeAuth = () => { $('auth').hidden = true; };
+$('account-btn').addEventListener('click', () => openAuth());
+$('auth-close').addEventListener('click', closeAuth);
+$('auth-switch').addEventListener('click', () => setAuthState(authState === 'signin' ? 'signup' : 'signin'));
+$('auth-forgot').addEventListener('click', () => setAuthState('forgot'));
+$('auth-signout').addEventListener('click', async () => { await signOut(); closeAuth(); });
+$('auth-agent').addEventListener('click', () => { closeAuth(); setMode('agent'); });
+$('auth-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!authConfigured()) { setAuthState(authState, 'Sign-in isn’t set up on this site yet.', true); return; }
+  const email = $('auth-email').value.trim(), pass = $('auth-pass').value;
+  const btn = $('auth-submit');
+  btn.disabled = true;
+  try {
+    if (authState === 'signin') { await signIn(email, pass); closeAuth(); }
+    else if (authState === 'signup') {
+      const r = await signUp(email, pass);
+      if (r.signedIn) closeAuth();
+      else setAuthState('signin', `Almost done! We sent a confirmation link to ${email}. Click it, and you'll come back here signed in.`);
+    } else if (authState === 'forgot') {
+      await resetPassword(email);
+      setAuthState('signin', `If ${email} has an account, a reset link is on its way.`);
+    } else if (authState === 'reset') {
+      await setNewPassword(pass);
+      closeAuth();
+      notice('Your new password is saved.');
+    }
+    $('auth-pass').value = '';
+  } catch (err) {
+    setAuthState(authState, err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+onAuthChange((s) => {
+  signedIn = !!s;
+  $('account-label').textContent = s ? s.user?.email || 'Account' : 'Sign in';
+  $('account-btn').classList.toggle('in', signedIn);
+  $('auth-who').textContent = s?.user?.email || '';
+  if (current && practice.mode === 'agent') renderMessages();
+});
 
 // Body language to go with a reply (talking with the hands happens on its own while speaking).
 function gestureFor(reply, text) {
@@ -644,6 +976,7 @@ function openNotebook() {
   renderMemory();
   renderReminders();
   renderContacts();
+  renderDocs();
   setTimeout(() => els.memName.focus(), 50);
 }
 function closeNotebook() {
@@ -660,6 +993,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (els.notebook.classList.contains('open')) closeNotebook();
   els.help.hidden = true;
+  if (!$('auth').hidden) closeAuth();
 });
 
 async function refreshModelStatus() {
@@ -748,17 +1082,32 @@ async function listen(btn, text) {
   }
 }
 
-// Light / black theme
+// Themes: light (paper), dark (charcoal), black (true black), glass (frosted panels)
+const THEMES = { light: '#E9DFCC', dark: '#0F0F11', black: '#000000', glass: '#0d1020' };
 function setTheme(theme, { save = true } = {}) {
+  if (!THEMES[theme]) theme = 'light';
   document.documentElement.dataset.theme = theme;
   if (save) write('toonlight:theme', theme);
-  const dark = theme === 'dark';
-  $('theme-toggle').setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to black theme');
-  $('theme-toggle').title = dark ? 'Light theme' : 'Black theme';
-  document.querySelector('meta[name="theme-color"]').content = dark ? '#0F0F11' : '#E9DFCC';
-  if (current) stage.setTheme(current.theme.tint, dark);
+  document.querySelector('meta[name="theme-color"]').content = THEMES[theme];
+  document.querySelectorAll('[data-theme-pick]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.themePick === theme)));
+  if (current) stage.setTheme(current.theme.tint, theme !== 'light', theme);
 }
-$('theme-toggle').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
+const themeMenu = $('theme-menu');
+function toggleThemeMenu(open = themeMenu.hidden) {
+  themeMenu.hidden = !open;
+  $('theme-toggle').setAttribute('aria-expanded', String(open));
+  if (open) themeMenu.querySelector('[aria-checked="true"]')?.focus();
+}
+$('theme-toggle').addEventListener('click', (e) => { e.stopPropagation(); toggleThemeMenu(); });
+themeMenu.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-theme-pick]');
+  if (!b) return;
+  setTheme(b.dataset.themePick);
+  toggleThemeMenu(false);
+  $('theme-toggle').focus();
+});
+document.addEventListener('click', (e) => { if (!themeMenu.hidden && !e.target.closest('.theme-wrap')) toggleThemeMenu(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !themeMenu.hidden) toggleThemeMenu(false); });
 // Natural voices: on by default on computers. The model (~90 MB, downloaded once, then cached)
 // loads quietly in the background; until it's ready, the browser's own voice is used.
 async function setNatural(on, { auto } = {}) {
@@ -846,6 +1195,21 @@ setTheme(document.documentElement.dataset.theme || 'light', { save: false });
 for (const r of reminders) if (!r.done && r.at < Date.now()) setTimeout(() => fireReminder(r, { late: true }), 1500);
 scheduleReminders();
 setInterval(scheduleReminders, 6 * 3600 * 1000);
+
+{
+  const back = await handleRedirect();
+  const s = await getSession();
+  signedIn = !!s;
+  $('account-label').textContent = s ? s.user?.email || 'Account' : 'Sign in';
+  $('account-btn').classList.toggle('in', signedIn);
+  $('auth-who').textContent = s?.user?.email || '';
+  if (!authConfigured()) $('account-btn').hidden = true;
+  if (back === 'recovery') setTimeout(() => openAuth('reset'), 400);
+  else if (back === 'signup') setTimeout(() => notice(`You're signed in${s?.user?.email ? ` as ${s.user.email}` : ''}. Agent mode is unlocked.`), 400);
+  else if (back?.startsWith('error:')) setTimeout(() => notice(`Sign-in link problem: ${back.slice(6)}. Try again.`), 400);
+  const docId = read('toonlight:doc', '');
+  if (docId) activeDoc = await getDoc(docId);
+}
 
 buildCast();
 buildModes();

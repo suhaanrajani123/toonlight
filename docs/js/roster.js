@@ -28,7 +28,7 @@ export const ROSTER = [
     build: kaito.build,
     theme: { tint: '#EDB95E', top: '#c96a2e', bottom: '#f6d99b', accent: '#8a4a1c' },
     voice: { web: { pitch: 1.0, rate: 1.02, gender: 'male' }, hd: { voice: 'am_michael', speed: 1.0, pitch: 1.0 } },
-    prompts: ['Give me a 10-minute workout', 'Plan a weekend trip for me', 'Remind me in an hour to stretch'],
+    prompts: ['Give me a 10-minute workout', 'Plan a weekend trip for me', "I'm losing motivation, help!"],
   },
   {
     id: 'raven', name: 'Raven Ashford', short: 'Raven', kind: 'Anime',
@@ -37,7 +37,7 @@ export const ROSTER = [
     build: raven.build,
     theme: { tint: '#B6A9E6', top: '#1b1d2e', bottom: '#565b7d', accent: '#6c5fc7' },
     voice: { web: { pitch: 1.0, rate: 1.0, gender: 'female' }, hd: { voice: 'af_bella', speed: 1.0, pitch: 1.0 } },
-    prompts: ['How do I spot a scam message?', 'Explain how inflation works', "WhatsApp my friend that I'm running 10 minutes late"],
+    prompts: ['How do I spot a scam message?', 'Explain how inflation works', 'Tips for staying safe in a new city'],
   },
   {
     id: 'jun', name: 'Jun Arata', short: 'Jun', kind: 'Anime',
@@ -46,7 +46,7 @@ export const ROSTER = [
     build: jun.build,
     theme: { tint: '#9FC7EA', top: '#2a2f45', bottom: '#9aaccc', accent: '#c93d84' },
     voice: { web: { pitch: 1.0, rate: 1.03, gender: 'male' }, hd: { voice: 'am_puck', speed: 1.02, pitch: 1.0 } },
-    prompts: ['Explain recursion simply', 'Which laptop specs matter for coding?', 'Find me a good wireless mouse on Amazon'],
+    prompts: ['Explain recursion simply', 'Which laptop specs matter for coding?', 'What is an API?'],
   },
   {
     id: 'elara', name: 'Elara Quinn', short: 'Elara', kind: 'Anime',
@@ -55,7 +55,7 @@ export const ROSTER = [
     build: elara.build,
     theme: { tint: '#EEB0A8', top: '#7b6f9e', bottom: '#f2d4cf', accent: '#a0505a' },
     voice: { web: { pitch: 1.0, rate: 0.97, gender: 'female' }, hd: { voice: 'af_heart', speed: 0.97, pitch: 1.0 } },
-    prompts: ['Give me a chicken biryani recipe', 'How do I stop procrastinating?', 'Add a study session to my calendar Friday at 4pm'],
+    prompts: ['Give me a chicken biryani recipe', 'How do I stop procrastinating?', 'Help me plan a study schedule'],
   },
   {
     id: 'fennick', name: 'Fennick', short: 'Fennick', kind: 'Cartoon',
@@ -64,7 +64,7 @@ export const ROSTER = [
     build: fennick.build,
     theme: { tint: '#A9CDA1', top: '#3f8580', bottom: '#efe1bd', accent: '#b85d1c' },
     voice: { web: { pitch: 1.0, rate: 1.0, gender: 'male' }, hd: { voice: 'am_fenrir', speed: 1.0, pitch: 1.0 } },
-    prompts: ['Why are there time zones?', 'Tell me a weird animal fact', 'Show me libraries near NJIT on a map'],
+    prompts: ['Why are there time zones?', 'Tell me a weird animal fact', 'How were the pyramids built?'],
   },
   {
     id: 'stella', name: 'Stella Nova', short: 'Stella', kind: 'Cartoon',
@@ -73,7 +73,7 @@ export const ROSTER = [
     build: stella.build,
     theme: { tint: '#F3A27F', top: '#e2433b', bottom: '#ffd36b', accent: '#b8261d' },
     voice: { web: { pitch: 1.05, rate: 1.05, gender: 'female' }, hd: { voice: 'af_sarah', speed: 1.05, pitch: 1.0 } },
-    prompts: ['Tell me a science pun', 'Give me a fun fact about space', 'Remind me to call mom at 8pm'],
+    prompts: ['Tell me a science pun', 'Give me a fun fact about space', 'Ideas for a birthday party?'],
   },
 ];
 

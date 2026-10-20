@@ -9,12 +9,28 @@ def check(cond, msg):
     print(('ok   ' if cond else 'FAIL ') + msg)
     if not cond: fails.append(msg)
 
-def with_api(page, url):
+def with_api(page, url, supabase=False):
     def handler(route):
         import re
         body = re.sub(r"API_URL: '[^']*'", f"API_URL: '{url}'", open('docs/js/config.js').read())
+        if supabase:
+            body = re.sub(r"SUPABASE_URL: '[^']*'", "SUPABASE_URL: 'https://fake.supabase.co'", body)
+            body = re.sub(r"SUPABASE_KEY: '[^']*'", "SUPABASE_KEY: 'k'", body)
         route.fulfill(status=200, content_type='text/javascript', body=body)
     page.route('**/js/config.js', handler)
+    if supabase:
+        import json
+        def supa(route):
+            u = route.request.url
+            if 'grant_type=password' in u:
+                body = json.loads(route.request.post_data or '{}')
+                if body.get('password') == 'secret123':
+                    return route.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'}, body=json.dumps({'access_token': 'good-token', 'refresh_token': 'r', 'expires_in': 3600, 'user': {'id': 'u1', 'email': body.get('email')}}))
+                return route.fulfill(status=400, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'}, body=json.dumps({'error_description': 'Invalid login credentials'}))
+            if route.request.method == 'OPTIONS':
+                return route.fulfill(status=200, headers={'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*'})
+            route.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'}, body='{}')
+        page.route('https://fake.supabase.co/**', supa)
 
 with sync_playwright() as p:
     b = p.chromium.launch(args=ARGS)
@@ -58,7 +74,7 @@ with sync_playwright() as p:
     errors = []
     pg.on('pageerror', lambda e: errors.append(str(e)))
     pg.on('console', lambda m: m.type == 'error' and 'TUNNEL' not in m.text and errors.append(m.text))  # sandbox blocks Google Fonts
-    with_api(pg, 'http://localhost:8787/chat')
+    with_api(pg, 'http://localhost:8787/chat', supabase=True)
     pg.goto('http://localhost:8765/#raven')
     pg.wait_for_timeout(1500)
     check(not pg.locator('#notice').is_visible(), 'no demo notice when API is set')
@@ -67,8 +83,12 @@ with sync_playwright() as p:
     check(pg.get_attribute('#mode-voice', 'aria-pressed') == 'true' and pg.get_attribute('#voice-toggle', 'aria-pressed') == 'true', 'voice switch works')
     pg.click('#mode-text')
     check(pg.evaluate("localStorage.getItem('toonlight:speak')") == 'off', 'chat-only choice saved')
-    pg.click('#theme-toggle')
-    check(pg.evaluate("document.documentElement.dataset.theme") == 'dark' and pg.evaluate("localStorage.getItem('toonlight:theme')") == 'dark', 'black theme toggles and is saved')
+    themes_ok = True
+    for t in ['glass', 'black', 'dark']:
+        pg.click('#theme-toggle'); pg.click(f'[data-theme-pick="{t}"]'); pg.wait_for_timeout(200)
+        themes_ok = themes_ok and pg.evaluate("document.documentElement.dataset.theme") == t and pg.evaluate("localStorage.getItem('toonlight:theme')") == t
+        if t == 'glass': pg.screenshot(path=f'{OUT}/03-glass.png')
+    check(themes_ok and pg.is_hidden('#theme-menu'), 'theme menu: glass, black and dark apply and are saved')
     pg.fill('#input', 'Who runs NASA right now?')
     pg.keyboard.press('Enter')
     pg.wait_for_selector('.msg.bot .sources a', timeout=45000)
@@ -89,19 +109,30 @@ with sync_playwright() as p:
     pg.screenshot(path=f'{OUT}/06-notebook.png')
     pg.keyboard.press('Escape'); pg.wait_for_timeout(500)
     check(not pg.evaluate("document.getElementById('notebook').classList.contains('open')"), 'Escape closes notebook')
-    # --- quiz mode with a score ---
+    # --- quiz: difficulty, shuffled options, the site grades, no repeats ---
     pg.click('.mode[data-mode="quiz"]'); pg.wait_for_timeout(500)
-    check(pg.is_visible('#mode-setup') and pg.is_visible('#mode-field'), 'quiz setup shown')
-    pg.fill('#mode-field', 'stacks and queues'); pg.click('#mode-start')
-    pg.wait_for_function("document.querySelectorAll('.msg.bot').length >= 2", timeout=45000)
-    pg.wait_for_timeout(300)
+    check(pg.is_visible('#mode-setup') and pg.is_visible('#mode-field') and pg.is_visible('#mode-diff'), 'quiz setup shows topic + difficulty')
+    pg.fill('#mode-field', 'stacks and queues'); pg.select_option('#mode-diff', 'hard'); pg.click('#mode-start')
+    pg.wait_for_selector('.quiz .quiz-opt', timeout=45000); pg.wait_for_timeout(300)
+    check(pg.locator('.quiz .quiz-opt').count() == 4 and '[quiz' not in pg.inner_text('#messages'), 'question shown as 4 answer buttons, tag hidden')
     check(pg.is_hidden('#score'), 'no score before the first answer')
-    pg.fill('#input', 'A'); pg.keyboard.press('Enter')
-    pg.wait_for_selector('#score:not([hidden])', timeout=45000)
-    check(pg.inner_text('#score-num') == '1/1', 'quiz score badge')
-    check('stacks and queues' in pg.inner_text('#window-title'), 'title shows quiz topic')
+    check('hard' in pg.inner_text('#window-title').lower(), 'title shows difficulty')
     sent = pg.evaluate("JSON.parse(localStorage.getItem('toonlight:history:raven:quiz'))[0].text")
-    check('stacks and queues' in sent, 'quiz start message includes topic')
+    check('stacks and queues' in sent and 'hard' in sent, 'quiz start message includes topic and level')
+    right = pg.locator('.quiz >> nth=-1').locator('.quiz-opt', has_text='Last In First Out')
+    right.click()
+    pg.wait_for_selector('#score:not([hidden])', timeout=45000)
+    check(pg.inner_text('#score-num') == '1/1' and pg.locator('.quiz-opt.right').count() == 1, 'site grades the answer: 1/1, marked right')
+    pg.wait_for_function("document.querySelectorAll('.quiz').length >= 2", timeout=45000); pg.wait_for_timeout(300)
+    qs = pg.evaluate("[...document.querySelectorAll('.quiz-q')].map(e => e.textContent)")
+    check(len(set(qs)) == len(qs), 'next question arrives and is different')
+    hist = pg.evaluate("JSON.parse(localStorage.getItem('toonlight:history:raven:quiz')).filter(m => m.quiz).map(m => m.quiz)")
+    wrong = 'ABCD'[(hist[-1]['answer'] + 1) % 4]
+    pg.fill('#input', wrong.lower()); pg.keyboard.press('Enter')
+    pg.wait_for_function("document.querySelectorAll('.quiz').length >= 3", timeout=45000); pg.wait_for_timeout(300)
+    check(pg.inner_text('#score-num') == '1/2' and pg.locator('.quiz-opt.wrong').count() == 1, 'typed letter answers too; wrong answer scored 1/2')
+    asked = pg.evaluate("JSON.parse(localStorage.getItem('toonlight:asked:topic:stacks and queues'))")
+    check(len(asked) == 3, f'asked questions remembered for no-repeat ({len(asked)})')
     pg.screenshot(path=f'{OUT}/07-quiz.png')
     # --- language mode ---
     pg.click('.mode[data-mode="language"]'); pg.wait_for_timeout(400)
@@ -113,7 +144,36 @@ with sync_playwright() as p:
     # --- back to chat keeps the earlier conversation ---
     pg.click('.mode[data-mode="chat"]'); pg.wait_for_timeout(400)
     check(pg.locator('.msg.user').count() == 2, 'chat history kept per mode')
-    # --- assistant actions ---
+    # --- documents: upload, ask, quiz from it ---
+    import zipfile, io
+    docx = io.BytesIO()
+    with zipfile.ZipFile(docx, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('[Content_Types].xml', '<Types/>')
+        z.writestr('word/document.xml', '<w:document><w:body><w:p><w:r><w:t>Photosynthesis turns sunlight, water and carbon dioxide into glucose and oxygen.</w:t></w:r></w:p><w:p><w:r><w:t>Chlorophyll in the chloroplasts absorbs mostly red and blue light, which is why leaves look green.</w:t></w:r></w:p></w:body></w:document>')
+    pg.set_input_files('#doc-file', files=[{'name': 'biology.docx', 'mimeType': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'buffer': docx.getvalue()}])
+    pg.wait_for_selector('#doc-bar:not([hidden])', timeout=30000)
+    check('biology.docx' in pg.inner_text('#doc-bar') and 'studied' in pg.inner_text('.msg.bot >> nth=-1'), 'Word document read and studied')
+    n0 = pg.locator('.msg.bot').count()
+    pg.fill('#input', 'why do leaves look green?'); pg.keyboard.press('Enter')
+    pg.wait_for_function(f"document.querySelectorAll('.msg.bot:not(.typing)').length > {n0}", timeout=45000); pg.wait_for_timeout(300)
+    check('Chlorophyll' in pg.inner_text('.msg.bot >> nth=-1'), 'answer uses the right part of the document')
+    pg.click('.mode[data-mode="quiz"]'); pg.wait_for_timeout(400)
+    check(pg.is_visible('#mode-usedoc'), 'quiz offers "From my document"')
+    pg.check('#mode-usedoc'); pg.fill('#mode-field', ''); pg.click('#mode-start')
+    pg.wait_for_selector('.quiz .quiz-opt', timeout=45000); pg.wait_for_timeout(300)
+    check('from your document' in pg.inner_text('.quiz-q >> nth=-1'), 'quiz question written from the document')
+    pg.click('#doc-off'); pg.wait_for_timeout(200)
+    check(pg.is_hidden('#doc-bar'), 'document can be turned off')
+    # --- Agent mode: locked until signed in ---
+    pg.click('.mode[data-mode="agent"]'); pg.wait_for_timeout(500)
+    check(pg.locator('.gate').count() == 1 and pg.is_disabled('#input'), 'Agent mode locked when signed out')
+    pg.click('.gate .btn'); pg.wait_for_timeout(300)
+    pg.fill('#auth-email', 'me@example.com'); pg.fill('#auth-pass', 'wrongpass'); pg.click('#auth-submit')
+    pg.wait_for_selector('.auth-msg.err', timeout=10000)
+    check("don’t match" in pg.inner_text('#auth-msg'), 'wrong password shows a clear error')
+    pg.fill('#auth-pass', 'secret123'); pg.click('#auth-submit')
+    pg.wait_for_selector('#auth', state='hidden', timeout=10000); pg.wait_for_timeout(400)
+    check('me@example.com' in pg.inner_text('#account-label') and pg.locator('.gate').count() == 0 and pg.is_enabled('#input'), 'signed in: Agent mode unlocked')
     def say(t):
         n = pg.locator('.msg.bot').count()
         pg.fill('#input', t); pg.press('#input', 'Enter')
@@ -141,8 +201,14 @@ with sync_playwright() as p:
     pg.reload(); pg.wait_for_timeout(3500)
     check('math notes' in pg.inner_text('#messages') and 'Reminder' in pg.inner_text('#messages'), 'missed reminder shown on next visit')
     check(pg.locator('.action').count() >= 4, 'action cards come back after reload')
+    pg.evaluate("(() => { const s = JSON.parse(localStorage.getItem('toonlight:session')); s.access_token = 'forged'; s.expires_at = Date.now() + 3600e3; localStorage.setItem('toonlight:session', JSON.stringify(s)); })()")
+    pg.reload(); pg.wait_for_timeout(2500)
+    pg.fill('#input', 'remind me in an hour about my math notes'); pg.keyboard.press('Enter')
+    pg.wait_for_selector('#auth:not([hidden])', timeout=45000); pg.wait_for_timeout(300)
+    check('sign in again' in pg.inner_text('#messages').lower() and pg.is_visible('#auth'), 'server rejects a forged sign-in')
     g = pg.evaluate("window.__toonlight.stage.rig.gestures ? 'yes' : 'no'")
     check(g == 'yes', 'character has gestures')
+    errors = [e for e in errors if not ('status of 400' in e or 'status of 401' in e)]  # the wrong-password and forged-token checks above
     check(not errors, f'no console errors with API {errors[:3]}')
     pg.close()
 

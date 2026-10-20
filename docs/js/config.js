@@ -9,6 +9,12 @@
 export const CONFIG = {
   API_URL: 'https://toonlight.suhaanrajani276.workers.dev/chat',
 
+  // Supabase project for sign-in (Agent mode). Both values are public by design: the
+  // "publishable"/anon key only allows what your project's settings allow.
+  // Find them in Supabase → Project Settings → API. Leave empty to hide sign-in.
+  SUPABASE_URL: '',
+  SUPABASE_KEY: '',
+
   // How many past messages to send with each question (more = better memory, slower).
   HISTORY_TURNS: 12,
 

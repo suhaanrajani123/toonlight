@@ -4,6 +4,7 @@
 import { CONFIG } from './config.js';
 import { MOOD_NAMES } from './toonkit.js';
 import { extractActions } from './actions.js';
+import { extractQuiz } from './quiz.js';
 
 export const isDemo = () => !CONFIG.API_URL;
 
@@ -24,13 +25,15 @@ export function clearHistory(id, mode) {
 //   [remember: The user is …]   a fact to save in memory
 //   [score: 3/4]                 quiz score
 //   [action: {"type": …}]        something to do for you (see actions.js)
+//   [quiz: {"q": …}]              a quiz question (see quiz.js)
 // Pull them all out, and strip markdown symbols (the text is read aloud).
 export function parseReply(raw) {
   const m = raw.match(/^\s*\[(\w+)\]\s*/);
   const mood = m && MOOD_NAMES.includes(m[1].toLowerCase()) ? m[1].toLowerCase() : 'neutral';
   const remember = [];
   let score = null;
-  const { text: rest, actions } = extractActions(raw.slice(m ? m[0].length : 0));
+  const { text: rest0, actions } = extractActions(raw.slice(m ? m[0].length : 0));
+  const { text: rest, quiz } = extractQuiz(rest0);
   const text = rest
     .replace(/\[\s*remember\s*:\s*([^\]]{3,240})\]/gi, (_, f) => { remember.push(f.trim()); return ''; })
     .replace(/\[\s*score\s*:\s*(\d{1,3})\s*\/\s*(\d{1,3})\s*\]/gi, (_, a, b) => { score = { right: +a, total: +b }; return ''; })
@@ -39,7 +42,7 @@ export function parseReply(raw) {
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return { mood, text, remember, score, actions };
+  return { mood, text, remember, score, actions, quiz };
 }
 
 export class ChatError extends Error {
@@ -57,7 +60,7 @@ function demoReply(character, history) {
   };
 }
 
-// ctx: { mode, topic, lang, memory }
+// ctx: { mode, topic, lang, memory, difficulty, style, avoid, doc, auth }
 export async function ask(character, history, ctx = {}) {
   if (isDemo()) {
     await new Promise((r) => setTimeout(r, 650));
@@ -73,7 +76,14 @@ export async function ask(character, history, ctx = {}) {
   if (ctx.topic) body.topic = ctx.topic.slice(0, 120);
   if (ctx.mode === 'language' && ctx.lang) body.lang = ctx.lang;
   if (ctx.memory) body.memory = ctx.memory;
-  if (!ctx.mode || ctx.mode === 'chat') {
+  if (ctx.mode === 'quiz') {
+    if (ctx.difficulty) body.difficulty = ctx.difficulty;
+    if (ctx.style) body.style = ctx.style;
+    if (ctx.avoid?.length) body.avoid = ctx.avoid.slice(-40);
+  }
+  if (ctx.doc) body.doc = ctx.doc;
+  if (ctx.auth) body.auth = ctx.auth;
+  if (!ctx.mode || ctx.mode === 'chat' || ctx.mode === 'agent') {
     // the current time, so "remind me in an hour" / "Friday at 4" can be worked out
     const now = new Date();
     body.now = now.toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -94,6 +104,6 @@ export async function ask(character, history, ctx = {}) {
     clearTimeout(timer);
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ChatError(res.status, data.error || 'error');
+  if (!res.ok) { const err = new ChatError(res.status, data.error || 'error'); err.code = data.code; throw err; }
   return { ...parseReply(data.reply || ''), sources: Array.isArray(data.sources) ? data.sources : [] };
 }

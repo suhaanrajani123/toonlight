@@ -38,7 +38,7 @@ Format rules (your reply is read aloud by a voice):
 - If you don't know something, say so honestly instead of guessing.
 - You're an original fictional AI character; if asked, say you're an AI. Never claim to be a real person.
 - Keep things appropriate for all ages, and politely decline harmful or explicit requests.
-- Tags in square brackets (mood, remember, score, action) are read by the website and hidden from the user.`;
+- Tags in square brackets (mood, remember, score, action, quiz) are read by the website and hidden from the user.`;
 
 const PERSONAS = {
   kaito: `You are Kaito Hayabusa, an upbeat, big-hearted adventurer and motivator.
@@ -75,12 +75,23 @@ const LANGS = ['Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Japanese
 
 const MODES = {
   chat: '',
-  quiz: `MODE: QUIZ ME (exam practice) on: {topic}.
-Ask exactly ONE question at a time: either multiple choice (options A to D, each on its own line) or short answer.
-Then stop and wait for the user's answer. When they answer: say whether it's right, explain why in one or two
-sentences, then ask the next question. Make questions a bit harder as they get them right.
-Keep a running score, and end every reply that grades an answer with a tag like [score: 3/4].
-If the topic is missing or vague, first ask what subject and level they want to be quizzed on.`,
+  agent: 'AGENT',
+  quiz: `MODE: QUIZ ME (exam practice) on: {topic}. Difficulty: {difficulty}.
+Every reply: at most one short friendly sentence (feedback on their last answer, or a quick intro), then exactly ONE
+multiple-choice question written as this tag, as valid JSON on one line:
+[quiz: {"q":"The question","options":["first option","second option","third option","fourth option"],"answer":2,"explain":"One or two sentences on why the right option is right."}]
+Rules:
+- Exactly 4 options, exactly one correct. "answer" is the 0-based position of the correct option in YOUR list. The website
+  shuffles the options and checks the answer itself, so never write letters, the answer or the explanation outside the tag.
+- Put the correct option in a random position in your list, not always first.
+- Wrong options must be plausible, the same kind of thing as the right one, and about the same length. No joke options.
+- Difficulty "easy": core facts and definitions. "medium": applying an idea or two-step reasoning. "hard": tricky cases,
+  multi-step problems and close distractors that test real understanding.
+- Style for this question: {style}.
+- It must be a NEW question: never repeat or reword any question the user was already asked (listed below), and test a
+  different fact or skill than the recent ones.
+- If the user asks something instead of answering, answer it briefly, then give the next question.
+- Don't use the [score] tag; the website keeps score.`,
   interview: `MODE: MOCK INTERVIEW for the role: {topic}.
 You are the interviewer. Ask ONE interview question at a time, mixing behavioral and technical questions,
 getting gradually harder. After each answer give: a rating out of 10, one thing they did well, and one concrete
@@ -118,6 +129,9 @@ Rules for actions:
 - Never invent phone numbers, email addresses, prices or product links.
 - Only add an action tag when the user asks you to do something. Ordinary questions get ordinary answers.`;
 
+// Question styles the site rotates through, so quizzes stay varied (kept in sync with docs/js/quiz.js).
+const STYLES = ['definition', 'application', 'scenario', 'cause and effect', 'compare two ideas', 'spot the mistake', 'worked example', 'which statement is true', 'fill in the blank', 'order or sequence'];
+
 const MEMORY_RULE = `Memory: if the user shares a lasting fact worth remembering for future chats (their name, goals,
 school or job, upcoming exams, interests, preferences), add ONE tag at the very end of your reply like
 [remember: The user is preparing for a data structures exam in December]. Only for genuinely useful facts,
@@ -133,15 +147,29 @@ export function buildSystem(character, opts = {}) {
     for (const f of mem.facts || []) lines.push(`- ${f}`);
     parts.push(`What you remember about the user from earlier visits (use it naturally, don't recite it):\n${lines.join('\n')}`);
   }
-  if (!opts.mode || opts.mode === 'chat') {
-    parts.push(ACTIONS_RULE);
-    if (opts.now) parts.push(`The user's current local date and time: ${opts.now}${opts.tz ? ` (time zone ${opts.tz})` : ''}. Use it to work out dates and times.`);
+  const modeName = opts.mode || 'chat';
+  if (modeName === 'agent') {
+    parts.push(`MODE: AGENT. The user is signed in and wants you to help them get things done.\n${ACTIONS_RULE}`);
   }
-  const mode = MODES[opts.mode || 'chat'];
-  if (mode) {
+  if (opts.now) parts.push(`The user's current local date and time: ${opts.now}${opts.tz ? ` (time zone ${opts.tz})` : ''}. Use it to work out dates and times.`);
+  const mode = MODES[modeName];
+  if (mode && mode !== 'AGENT') {
     parts.push(mode
-      .replaceAll('{topic}', opts.topic || '(not chosen yet)')
-      .replaceAll('{lang}', opts.lang || 'Spanish'));
+      .replaceAll('{topic}', opts.doc ? `the document "${opts.doc.name}"${opts.topic ? ` (focus: ${opts.topic})` : ''}` : opts.topic || '(not chosen yet)')
+      .replaceAll('{lang}', opts.lang || 'Spanish')
+      .replaceAll('{difficulty}', opts.difficulty || 'medium')
+      .replaceAll('{style}', opts.style || 'any'));
+    if (modeName === 'quiz' && opts.avoid?.length) {
+      parts.push(`Questions already asked (do NOT repeat or reword any of these):\n${opts.avoid.map((q) => `- ${q}`).join('\n')}`);
+    }
+  }
+  if (opts.doc) {
+    const body = opts.doc.parts.map((p, i) => `[Part ${i + 1}${p.where ? `, ${p.where}` : ''}]\n${p.text}`).join('\n\n');
+    parts.push(modeName === 'quiz'
+      ? `The user uploaded a document called "${opts.doc.name}". Write this question ONLY from the passage below (don't use outside facts for the answer):\n\n${body}`
+      : `The user uploaded a document called "${opts.doc.name}" and you have studied it. Below are the parts of it most related to their latest message.
+Answer from the document whenever the question is about it, and mention where it says so (like "page 4") when helpful.
+If the answer isn't in these parts, say you couldn't find it in the document, then help from general knowledge and say so.\n\n${body}`);
   }
   return parts.join('\n\n');
 }
@@ -196,6 +224,20 @@ function validate(body) {
   if (body.mode !== undefined && !(body.mode in MODES)) return 'Unknown mode.';
   if (body.lang !== undefined && !LANGS.includes(body.lang)) return 'Unsupported language.';
   if (body.topic !== undefined && (typeof body.topic !== 'string' || body.topic.length > 120)) return 'Topic must be a short string.';
+  if (body.difficulty !== undefined && !['easy', 'medium', 'hard'].includes(body.difficulty)) return 'Unknown difficulty.';
+  if (body.style !== undefined && !STYLES.includes(body.style)) return 'Unknown question style.';
+  if (body.avoid !== undefined && (!Array.isArray(body.avoid) || body.avoid.length > 60 || body.avoid.some((x) => typeof x !== 'string' || x.length > 200))) return 'avoid is invalid.';
+  const doc = body.doc;
+  if (doc !== undefined) {
+    if (typeof doc !== 'object' || doc === null || typeof doc.name !== 'string' || doc.name.length > 120 || !Array.isArray(doc.parts) || !doc.parts.length || doc.parts.length > 10) return 'doc is invalid.';
+    let total = 0;
+    for (const p of doc.parts) {
+      if (!p || typeof p.text !== 'string' || p.text.length > 2000 || (p.where !== undefined && (typeof p.where !== 'string' || p.where.length > 30))) return 'doc part is invalid.';
+      total += p.text.length;
+    }
+    if (total > 12000) return 'doc is too long.';
+  }
+  if (body.auth !== undefined && (typeof body.auth !== 'string' || body.auth.length > 4000)) return 'auth is invalid.';
   if (body.now !== undefined && (typeof body.now !== 'string' || body.now.length > 80)) return 'now must be a short string.';
   if (body.tz !== undefined && (typeof body.tz !== 'string' || body.tz.length > 60)) return 'tz must be a short string.';
   const mem = body.memory;
@@ -253,6 +295,32 @@ async function callGemini(env, system, contents, withSearch) {
   });
 }
 
+// ---------------- sign-in check (Supabase) ----------------
+// Agent mode is only for signed-in users. The site sends the Supabase session token; we ask
+// Supabase whether it's real. Good answers are remembered for 5 minutes.
+
+const DEFAULT_SUPABASE_URL = '__SUPABASE_URL__';
+const DEFAULT_SUPABASE_KEY = '__SUPABASE_KEY__';
+const verified = new Map();
+
+export async function verifyUser(env, token) {
+  const url = env.SUPABASE_URL || DEFAULT_SUPABASE_URL, key = env.SUPABASE_KEY || DEFAULT_SUPABASE_KEY;
+  if (!token || !/^https:/.test(url) || key.startsWith('__')) return null;
+  const hit = verified.get(token);
+  if (hit && hit.until > Date.now()) return hit.user;
+  try {
+    const res = await fetch(`${url.replace(/\/$/, '')}/auth/v1/user`, { headers: { apikey: key, Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const u = await res.json();
+    if (!u?.id) return null;
+    if (verified.size > 2000) verified.clear();
+    verified.set(token, { user: { id: u.id, email: u.email }, until: Date.now() + 5 * 60_000 });
+    return { id: u.id, email: u.email };
+  } catch {
+    return null;
+  }
+}
+
 // ---------------- the worker ----------------
 
 // Workers AI (Cloudflare's built-in models). messages: [{role, text}] from the site.
@@ -282,7 +350,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors.headers });
-    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 4, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
+    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 5, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
     if (request.method !== 'POST' || !['/chat', '/'].includes(url.pathname)) return json({ error: 'Not found' }, 404, cors.headers);
     if (!cors.ok) return json({ error: 'This website is not allowed to use this server.' }, 403, cors.headers);
     if (!env.GEMINI_API_KEY && !env.AI) return json({ error: 'Server has no AI connected. Add a Workers AI binding named AI (or a GEMINI_API_KEY secret).' }, 500, cors.headers);
@@ -295,7 +363,14 @@ export default {
     const problem = validate(body);
     if (problem) return json({ error: problem }, 400, cors.headers);
 
-    const system = buildSystem(body.character, { mode: body.mode, topic: body.topic, lang: body.lang, memory: body.memory, now: body.now, tz: body.tz });
+    if (body.mode === 'agent' && !(await verifyUser(env, body.auth))) {
+      return json({ error: 'Sign in to use Agent mode.', code: 'auth' }, 401, cors.headers);
+    }
+
+    const system = buildSystem(body.character, {
+      mode: body.mode, topic: body.topic, lang: body.lang, memory: body.memory, now: body.now, tz: body.tz,
+      difficulty: body.difficulty, style: body.style, avoid: body.avoid, doc: body.doc,
+    });
 
     // 1) Gemini, if a key is set
     if (env.GEMINI_API_KEY) {

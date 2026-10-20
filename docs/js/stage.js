@@ -93,9 +93,10 @@ export class Stage {
     this.camera.updateProjectionMatrix();
   }
 
-  setTheme(color, dark = false) {
-    this.platformTop.color.set(dark ? 0x2a2a2e : 0xfbf6ec).lerp(new THREE.Color(color), dark ? 0.25 : 0.18);
-    this.platformRim.color.set(dark ? 0xd9d3c7 : 0x000000);
+  setTheme(color, dark = false, name = dark ? 'dark' : 'light') {
+    const top = { light: 0xfbf6ec, dark: 0x2a2a2e, black: 0x141414, glass: 0x2b3050 }[name] ?? 0x2a2a2e;
+    this.platformTop.color.set(top).lerp(new THREE.Color(color), dark ? 0.25 : 0.18);
+    this.platformRim.color.set(name === 'glass' ? 0x8a93b8 : dark ? 0xd9d3c7 : 0x000000);
     this.rim.color.set(color).lerp(new THREE.Color(0xffffff), 0.45);
   }
 
