@@ -5,13 +5,15 @@ import { ROSTER, byId } from './roster.js';
 import { Stage, portrait } from './stage.js';
 import { Voice } from './voice.js';
 import { Listener } from './listen.js';
-import { ask, isDemo, loadHistory, saveHistory, clearHistory } from './chat.js';
+import { ask, isDemo } from './chat.js';
+import { newId, listChats, loadMessages, saveLocal, removeLocal, renameLocal, migrateOld, titleFrom, groupLabel, pushChat, pullChats, deleteRemote, renameRemote, forgetAccount } from './history.js';
 import { MODES, LANGS, modeById, langCode, AGENT_PROMPTS } from './modes.js';
 import { loadMemory, saveMemory, remember, memoryPayload } from './memory.js';
 import { saveModel, getModel, removeModel } from './models.js';
 import { describe, loadContacts, saveContacts, loadReminders, saveReminders, when } from './actions.js';
 import { ACCEPT, addDoc, getDoc, listDocs, removeDoc, passagesFor, quizPassage } from './docs.js';
 import { letter, parseAnswer, askedBefore, rememberAsked, isRepeat, pickStyle } from './quiz.js';
+import { saveImage, getImage } from './media.js';
 import { authConfigured, getSession, signIn, signUp, signOut, resetPassword, setNewPassword, handleRedirect, onAuthChange } from './auth.js';
 
 const $ = (id) => document.getElementById(id);
@@ -37,7 +39,8 @@ const read = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { re
 const write = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 
 let current = null;                       // character on stage
-let log = [];                             // current conversation
+let chat = { meta: null, messages: [] };  // the open chat (meta is set once the first message is sent)
+let log = chat.messages;                  // its messages
 let busy = false;
 const rigs = new Map();
 const memory = loadMemory();
@@ -50,6 +53,7 @@ const practice = {                        // what we're practicing (shared acros
 };
 let activeDoc = null;                     // the document being studied (docs.js)
 let signedIn = false;                     // Supabase session present (auth.js)
+let sessionUser = null;                   // { id, email } of the signed-in account
 let lastStyle = null;                     // last quiz question style, so the next one differs
 const quizCards = new WeakMap();          // quiz entry → its card on screen
 if (!MODES.some((m) => m.id === practice.mode)) practice.mode = 'chat';
@@ -110,9 +114,10 @@ async function drawPortraits(only) {
     face.style.backgroundImage = `url(${portrait(await makeRig(c))})`;
     await new Promise((r) => setTimeout(r, 30));
   }
+  renderChatList(); // the chat list shows these faces too
 }
 
-async function select(id) {
+async function select(id, { keepChat = false } = {}) {
   const c = byId(id);
   if (current?.id === c.id) return;
   voice.stop();
@@ -128,7 +133,8 @@ async function select(id) {
   els.cast.querySelectorAll('.card').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === c.id)));
   history.replaceState(null, '', `#${c.id}`);
   updateTitles();
-  loadConversation();
+  if (keepChat) renderMessages();
+  else startNewChat();               // a different character = a new chat
   refreshModelStatus();
 
   const rig = await rigFor(c);
@@ -173,7 +179,7 @@ function buildModes() {
   }
 }
 
-function setMode(id, { quiet } = {}) {
+function setMode(id, { quiet, keepChat } = {}) {
   practice.mode = id;
   practice.topic = read(`toonlight:topic:${id}`, '');
   write('toonlight:mode', id);
@@ -203,7 +209,8 @@ function setMode(id, { quiet } = {}) {
   if (current && !quiet) {
     voice.stop();
     updateTitles();
-    loadConversation();
+    if (keepChat) renderMessages();
+    else startNewChat();             // a different mode = a new chat
   }
 }
 
@@ -225,10 +232,8 @@ els.setup.addEventListener('submit', (e) => {
     write('toonlight:usedoc', practice.useDoc ? 'on' : 'off');
   }
   updateTitles();
-  // a fresh session for the new topic/language
-  clearHistory(current.id, practice.mode);
-  log = [];
-  renderMessages();
+  // a fresh chat for the new topic/language
+  startNewChat();
   send(m.start({ ...practice, useDoc: practice.useDoc && !!activeDoc, docName: activeDoc?.name }));
 });
 
@@ -250,12 +255,206 @@ function showScore() {
 
 // ---------- chat ----------
 
-function loadConversation() {
-  log = loadHistory(current.id, practice.mode);
+// ---------- saved chats (the Chats sidebar) ----------
+
+function startNewChat() {
+  voice.stop();
+  chat = { meta: null, messages: [] };
+  log = chat.messages;
   els.score.hidden = true;
+  if (current) { updateTitles(); renderMessages(); }
+  renderChatList();
+}
+
+function makeMeta(firstText) {
+  const extra = { topic: practice.topic, lang: practice.lang, docName: practice.mode === 'quiz' && practice.useDoc && activeDoc ? activeDoc.name : '' };
+  return {
+    id: newId(), character: current.id, mode: practice.mode,
+    topic: practice.topic || '', lang: practice.mode === 'language' ? practice.lang : undefined,
+    difficulty: practice.mode === 'quiz' ? practice.difficulty : undefined,
+    useDoc: practice.mode === 'quiz' && practice.useDoc && !!activeDoc ? true : undefined,
+    title: titleFrom(firstText, practice.mode, extra),
+    created: Date.now(), updated: Date.now(), owner: sessionUser?.id || null,
+  };
+}
+
+const pushTimers = new Map();
+function persist(ch = chat) {
+  if (!ch.meta) return;
+  if (!ch.messages.length) { deleteChat(ch.meta.id, { keepOpen: true }); ch.meta = null; return; }
+  ch.meta.updated = Date.now();
+  saveLocal(ch.meta, ch.messages);
+  renderChatList();
+  // signed in: also save to your account (a moment later, so quick changes go in one save)
+  if (ch.meta.owner && sessionUser?.id === ch.meta.owner) {
+    clearTimeout(pushTimers.get(ch.meta.id));
+    pushTimers.set(ch.meta.id, setTimeout(async () => {
+      const s = await getSession();
+      if (s && ch.meta && s.user?.id === ch.meta.owner) pushChat(s.access_token, ch.meta, ch.messages).catch((e) => console.warn('Chat not synced yet', e));
+    }, 800));
+  }
+}
+
+async function openChat(id) {
+  const meta = listChats().find((c) => c.id === id);
+  if (!meta || chat.meta?.id === id) { closeHistoryOverlay(); return; }
+  voice.stop();
+  chat = { meta, messages: loadMessages(id) };
+  log = chat.messages;
+  // put the stage back the way that chat was: its mode, topic, language, level
+  setMode(meta.mode, { quiet: true });
+  practice.topic = meta.topic || '';
+  if (meta.lang) practice.lang = meta.lang;
+  if (meta.difficulty) practice.difficulty = meta.difficulty;
+  practice.useDoc = !!meta.useDoc;
+  els.setupField.value = practice.topic;
+  els.setupLang.value = practice.lang;
+  $('mode-diff').value = practice.difficulty;
+  $('mode-usedoc').checked = practice.useDoc;
+  if (current?.id !== meta.character) await select(meta.character, { keepChat: true });
+  updateTitles();
   showScore();
   renderMessages();
+  renderChatList();
+  closeHistoryOverlay();
 }
+
+async function deleteChat(id, { keepOpen = false } = {}) {
+  const meta = listChats().find((c) => c.id === id);
+  removeLocal(id);
+  if (meta?.owner && sessionUser?.id === meta.owner) {
+    const s = await getSession();
+    if (s) deleteRemote(s.access_token, id).catch(() => {});
+  }
+  if (!keepOpen && chat.meta?.id === id) startNewChat();
+  else renderChatList();
+}
+
+async function renameChat(id, title) {
+  title = title.trim().slice(0, 80);
+  if (!title) return renderChatList();
+  const meta = renameLocal(id, title);
+  if (chat.meta?.id === id) chat.meta.title = title;
+  if (meta?.owner && sessionUser?.id === meta.owner) {
+    const s = await getSession();
+    if (s) renameRemote(s.access_token, id, title).catch(() => {});
+  }
+  renderChatList();
+}
+
+const MODE_LABEL = Object.fromEntries(MODES.map((m) => [m.id, m.label]));
+function renderChatList() {
+  const list = $('chat-list');
+  if (!list) return;
+  const q = $('chat-search').value.trim().toLowerCase();
+  const chats = listChats().filter((c) => !q || c.title.toLowerCase().includes(q) || byId(c.character).short.toLowerCase().includes(q));
+  list.replaceChildren();
+  let group = null;
+  for (const c of chats) {
+    const g = groupLabel(c.updated);
+    if (g !== group) {
+      group = g;
+      const h = document.createElement('p');
+      h.className = 'chat-group';
+      h.textContent = g;
+      list.append(h);
+    }
+    list.append(chatItem(c));
+  }
+  if (!chats.length) {
+    const p = document.createElement('p');
+    p.className = 'chat-empty';
+    p.textContent = q ? 'No chats match that.' : 'Your chats will show up here.';
+    list.append(p);
+  }
+  $('history-note').textContent = sessionUser
+    ? `Saved to your account, so they're on every device you sign in on.`
+    : 'Saved in this browser. Sign in to keep them on all your devices.';
+}
+
+function chatItem(c) {
+  const item = document.createElement('div');
+  item.className = 'chat-item';
+  item.setAttribute('role', 'button');
+  item.tabIndex = 0;
+  item.setAttribute('aria-current', String(chat.meta?.id === c.id));
+  const face = document.createElement('span');
+  face.className = 'chat-face';
+  face.style.backgroundImage = els.cast.querySelector(`[data-id="${c.character}"] .face`)?.style.backgroundImage || '';
+  const text = document.createElement('span');
+  text.className = 'chat-text';
+  const t = document.createElement('span');
+  t.className = 'chat-title';
+  t.textContent = c.title;
+  const sub = document.createElement('span');
+  sub.className = 'chat-sub';
+  sub.textContent = `${byId(c.character).short} · ${MODE_LABEL[c.mode] || 'Chat'}`;
+  text.append(t, sub);
+  const tools = document.createElement('span');
+  tools.className = 'chat-tools';
+  const tool = (icon, label, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('aria-label', `${label}: ${c.title}`);
+    b.title = label;
+    b.innerHTML = `<svg class="ico"><use href="#${icon}"/></svg>`;
+    b.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
+    tools.append(b);
+  };
+  tool('i-pencil', 'Rename', () => {
+    const input = document.createElement('input');
+    input.className = 'chat-rename';
+    input.value = c.title;
+    input.maxLength = 80;
+    input.setAttribute('aria-label', 'Chat name');
+    let done = false;
+    const finish = (save) => { if (done) return; done = true; save ? renameChat(c.id, input.value) : renderChatList(); };
+    input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('click', (e) => e.stopPropagation());
+    text.replaceWith(input);
+    tools.remove();
+    input.focus();
+    input.select();
+  });
+  tool('i-trash', 'Delete', () => {
+    const ask = document.createElement('span');
+    ask.className = 'chat-confirm';
+    ask.textContent = 'Delete?';
+    const yes = document.createElement('button');
+    yes.type = 'button';
+    yes.className = 'yes';
+    yes.textContent = 'Delete';
+    yes.addEventListener('click', (e) => { e.stopPropagation(); deleteChat(c.id); });
+    const no = document.createElement('button');
+    no.type = 'button';
+    no.textContent = 'Keep';
+    no.addEventListener('click', (e) => { e.stopPropagation(); renderChatList(); });
+    ask.append(yes, no);
+    tools.replaceWith(ask);
+    no.focus();
+  });
+  item.append(face, text, tools);
+  item.addEventListener('click', () => openChat(c.id));
+  item.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === item) { e.preventDefault(); openChat(c.id); } });
+  return item;
+}
+
+// show / hide the Chats column (on narrow screens it slides over the window)
+const narrow = () => matchMedia('(max-width: 1280px)').matches;
+function setHistoryOpen(open, { save = true } = {}) {
+  $('panes').classList.toggle('with-history', open);
+  $('history-toggle').setAttribute('aria-expanded', String(open));
+  $('history-toggle').setAttribute('aria-label', open ? 'Hide chats' : 'Show chats');
+  if (save && !narrow()) write('toonlight:history-open', open ? 'on' : 'off');
+  stage.resize?.();
+}
+function closeHistoryOverlay() { if (narrow()) setHistoryOpen(false, { save: false }); }
+$('history-toggle').addEventListener('click', () => setHistoryOpen(!$('panes').classList.contains('with-history')));
+$('history-scrim').addEventListener('click', () => setHistoryOpen(false, { save: false }));
+$('new-chat').addEventListener('click', () => { startNewChat(); closeHistoryOverlay(); els.input.focus(); });
+$('new-chat-2').addEventListener('click', () => { startNewChat(); els.input.focus(); });
+$('chat-search').addEventListener('input', renderChatList);
 
 function greeting() {
   const m = modeById(practice.mode);
@@ -297,6 +496,8 @@ function bubble(role, text, { sources = [], who, fresh, memo, actions, made, ent
     l.addEventListener('click', () => listen(l, text));
     li.append(l);
   }
+  if (entry?.steps?.length) li.insertBefore(stepsBox(entry.steps, true), b);
+  for (const img of entry?.images || []) li.append(imageCard(img));
   if (entry?.quiz) li.append(quizCard(entry));
   for (const a of actions || []) {
     const card = actionCard(a, made);
@@ -385,10 +586,11 @@ async function send(text, { shown, quizAnswer = false } = {}) {
   voice.stop();
   if (voice.hd) voice.audioContext().resume();
 
-  const c = current, mode = practice.mode;
+  const c = current, mode = practice.mode, ch = chat;
   const rig = await rigFor(c);
-  log.push(shown ? { role: 'user', text, shown } : { role: 'user', text });
-  saveHistory(c.id, mode, log);
+  if (!ch.meta) ch.meta = makeMeta(shown || text);
+  ch.messages.push(shown ? { role: 'user', text, shown } : { role: 'user', text });
+  persist(ch);
   bubble('user', shown || text, { fresh: true });
   els.input.value = '';
   autoGrow();
@@ -406,9 +608,29 @@ async function send(text, { shown, quizAnswer = false } = {}) {
     const quizDoc = mode === 'quiz' && practice.useDoc && activeDoc;
     const qKey = quizDoc ? `doc:${activeDoc.id}` : `topic:${practice.topic || 'general'}`;
     let used = null;
+    let steps = null, liveImages = null;
     if (mode === 'agent') {
       ctx.auth = (await getSession())?.access_token;
       if (!ctx.auth) throw Object.assign(new Error('auth'), { status: 401, code: 'auth' });
+      if (activeDoc) {
+        const prev = [...log].reverse().find((m) => m.role === 'assistant')?.text || '';
+        ctx.doc = { name: activeDoc.name, parts: passagesFor(activeDoc, text, prev.slice(0, 300)) };
+      }
+      // show each step as the agent works
+      steps = [];
+      liveImages = document.createElement('div');
+      const box = stepsBox(steps, false);
+      typing.querySelector('.bubble').replaceWith(box);
+      typing.classList.remove('typing');
+      typing.append(liveImages);
+      ctx.onEvent = (ev) => {
+        if (ev.type === 'step') steps.push({ tool: ev.tool, label: String(ev.label || ev.tool).slice(0, 120), state: 'run' });
+        if (ev.type === 'step-done') { const st = steps.find((x) => x.tool === ev.tool && x.state === 'run'); if (st) st.state = ev.ok ? 'ok' : 'fail'; }
+        if (ev.type === 'image' && ev.image?.data) liveImages.append(imageCard({ data: ev.image.data, prompt: ev.image.prompt }));
+        box.refresh();
+        els.messages.scrollTop = els.messages.scrollHeight;
+        rig.gesture?.(ev.type === 'step' ? 'explain' : null);
+      };
     }
     if (mode === 'chat' && activeDoc) {
       const prev = [...log].reverse().find((m) => m.role === 'assistant')?.text || '';
@@ -442,11 +664,19 @@ async function send(text, { shown, quizAnswer = false } = {}) {
     const actions = reply.actions?.length ? reply.actions : undefined;
     const entry = { role: 'assistant', text: reply.text || (actions ? 'Here you go:' : reply.quiz ? (quizAnswer ? 'Next one:' : 'Here’s your question:') : '…'), sources: reply.sources, memo, actions, made: actions ? Date.now() : undefined };
     if (reply.quiz) entry.quiz = reply.quiz;
-    const target = current === c && practice.mode === mode ? log : loadHistory(c.id, mode);
-    target.push(entry);
-    saveHistory(c.id, mode, target);
+    if (steps?.length) entry.steps = steps.map(({ label, state }) => ({ label, ok: state !== 'fail' }));
+    if (reply.images?.length) {
+      entry.images = [];
+      for (const img of reply.images) {
+        const id = newId();
+        await saveImage(id, img.data);
+        entry.images.push({ id, prompt: String(img.prompt || '').slice(0, 300), data: img.data });
+      }
+    }
+    ch.messages.push(entry);
+    persist(ch);
     typing.remove();
-    if (current !== c || practice.mode !== mode) return;
+    if (chat !== ch) return;   // you switched to another chat while this one was answering
     bubble('assistant', entry.text, { sources: entry.sources, who: c.short, fresh: true, memo, actions: entry.actions, made: entry.made, entry });
     showScore();
     rig.setMood(reply.mood);
@@ -460,8 +690,8 @@ async function send(text, { shown, quizAnswer = false } = {}) {
     await voice.speak(say, c.voice, lang);
   } catch (e) {
     typing.remove();
-    log.pop();
-    saveHistory(c.id, mode, log);
+    ch.messages.pop();
+    persist(ch);
     if (e.code === 'auth') {
       if (e.status === 401) await signOut(); // the sign-in expired or was rejected
       bubble('system', 'Please sign in again to use Agent mode.');
@@ -476,6 +706,49 @@ async function send(text, { shown, quizAnswer = false } = {}) {
     els.send.disabled = false;
     setTimeout(() => !busy && !voice.speaking && rig.setMood('neutral'), 3500);
   }
+}
+
+// ---------- agent steps and pictures ----------
+
+// The list of what the agent did ("Searching the web for…" ✓). Live while it works, folded up afterwards.
+function stepsBox(steps, done) {
+  const box = document.createElement(done ? 'details' : 'div');
+  box.className = `steps${done ? '' : ' live'}`;
+  const head = document.createElement(done ? 'summary' : 'p');
+  head.className = 'steps-head';
+  const ol = document.createElement('ol');
+  box.append(head, ol);
+  box.refresh = () => {
+    head.textContent = done ? `Worked through ${steps.length} step${steps.length === 1 ? '' : 's'}` : steps.length ? 'Working on it…' : 'Thinking about how to do this…';
+    ol.replaceChildren(...steps.map((st) => {
+      const li = document.createElement('li');
+      const state = done ? (st.ok ? 'ok' : 'fail') : st.state;
+      li.className = `step ${state}`;
+      li.textContent = st.label;
+      return li;
+    }));
+  };
+  box.refresh();
+  return box;
+}
+
+function imageCard(img) {
+  const fig = document.createElement('figure');
+  fig.className = 'gen-image';
+  const pic = document.createElement('img');
+  pic.alt = img.prompt ? `Picture: ${img.prompt}` : 'Picture made by the agent';
+  pic.loading = 'lazy';
+  const cap = document.createElement('figcaption');
+  const save = document.createElement('a');
+  save.className = 'btn btn-small';
+  save.textContent = 'Save image';
+  save.download = 'toonlight-image.jpg';
+  const show = (src) => { pic.src = src; save.href = src; };
+  if (img.data) show(img.data);
+  else if (img.id) getImage(img.id).then((src) => (src ? show(src) : (cap.textContent = 'This picture was made on another device.')));
+  if (!cap.textContent) cap.append(save);
+  fig.append(pic, cap);
+  return fig;
 }
 
 // ---------- quiz cards ----------
@@ -537,7 +810,7 @@ async function answerQuiz(entry, i) {
   const q = entry.quiz;
   if (busy || q.picked != null) return;
   q.picked = i;
-  saveHistory(current.id, practice.mode, log);
+  persist();
   quizCards.get(entry)?.();
   showScore();
   const ok = i === q.answer;
@@ -716,13 +989,29 @@ $('auth-form').addEventListener('submit', async (e) => {
   }
 });
 
-onAuthChange((s) => {
+onAuthChange(async (s) => {
+  const before = sessionUser;
   signedIn = !!s;
+  sessionUser = s?.user || null;
   $('account-label').textContent = s ? s.user?.email || 'Account' : 'Sign in';
   $('account-btn').classList.toggle('in', signedIn);
   $('auth-who').textContent = s?.user?.email || '';
+  if (before && !sessionUser) {
+    // signed out: this account's chats leave this browser
+    forgetAccount(before.id);
+    if (chat.meta?.owner === before.id) startNewChat();
+  }
+  if (sessionUser && sessionUser.id !== before?.id) syncChats();
+  renderChatList();
   if (current && practice.mode === 'agent') renderMessages();
 });
+
+// Bring your account's chats into this browser.
+async function syncChats() {
+  const s = await getSession();
+  if (!s?.user) return;
+  try { if (await pullChats(s.access_token, s.user.id)) renderChatList(); } catch (e) { console.warn('Could not load your saved chats', e); }
+}
 
 // Body language to go with a reply (talking with the hands happens on its own while speaking).
 function gestureFor(reply, text) {
@@ -756,6 +1045,12 @@ function actionCard(a, made) {
     p.className = 'action-detail';
     p.textContent = d.detail;
     card.append(p);
+  }
+  if (d.preview) {
+    const pre = document.createElement('pre');
+    pre.className = 'action-preview';
+    pre.textContent = d.preview;
+    card.append(pre);
   }
   let body = null;
   if (d.body !== undefined) {
@@ -1138,10 +1433,8 @@ voice.onStatus = notice;
 
 els.clear.addEventListener('click', () => {
   voice.stop();
-  clearHistory(current.id, practice.mode);
-  log = [];
-  els.score.hidden = true;
-  renderMessages();
+  if (chat.meta) deleteChat(chat.meta.id);
+  else startNewChat();
   closeNotebook();
 });
 
@@ -1200,6 +1493,7 @@ setInterval(scheduleReminders, 6 * 3600 * 1000);
   const back = await handleRedirect();
   const s = await getSession();
   signedIn = !!s;
+  sessionUser = s?.user || null;
   $('account-label').textContent = s ? s.user?.email || 'Account' : 'Sign in';
   $('account-btn').classList.toggle('in', signedIn);
   $('auth-who').textContent = s?.user?.email || '';
@@ -1211,9 +1505,15 @@ setInterval(scheduleReminders, 6 * 3600 * 1000);
   if (docId) activeDoc = await getDoc(docId);
 }
 
+// chats saved before the sidebar existed move into it; every visit then starts a new chat
+migrateOld();
+setHistoryOpen(!narrow() && read('toonlight:history-open', 'on') === 'on', { save: false });
 buildCast();
 buildModes();
 setMode(practice.mode, { quiet: true });
 select(location.hash.slice(1) || ROSTER[0].id);
+renderChatList();
+if (sessionUser) syncChats();
 window.addEventListener('hashchange', () => select(location.hash.slice(1)));
-window.__toonlight = { stage, voice, memory, practice, get current() { return current; } };
+matchMedia('(max-width: 1280px)').addEventListener('change', (e) => setHistoryOpen(!e.matches && read('toonlight:history-open', 'on') === 'on', { save: false }));
+window.__toonlight = { stage, voice, memory, practice, get current() { return current; }, get chat() { return chat; } };
