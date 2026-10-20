@@ -45,7 +45,7 @@ The characters also **remember you**: your name, your goals, and facts you share
 ## How it works
 
 ```
-Your browser (GitHub Pages, free)                 Cloudflare Worker (free)          Google Gemini (free tier)
+Your browser (Cloudflare Pages, free)              Cloudflare Worker (free)          Google Gemini (free tier)
 ┌───────────────────────────────────┐   POST     ┌─────────────────────────┐        ┌──────────────────────┐
 │ Three.js renders the 3D character │  /chat ──► │ adds the personality +  │ ─────► │ writes the reply,    │
 │ Mic → speech recognition (free)   │            │ your secret API key,    │        │ searches Google when │
@@ -87,12 +87,19 @@ The AI runs on a free **Cloudflare Worker** using Cloudflare's built-in models (
 
 **Optional, for smarter answers with live Google Search:** add a secret named `GEMINI_API_KEY` from aistudio.google.com/apikey. The worker then uses Gemini first and falls back to Workers AI.
 
-## Put it online for free (GitHub Pages)
+## Put it online for free
 
-1. Create a new repository on GitHub, for example `toonlight`, and upload this whole project.
-2. In the repo, go to **Settings**, then **Pages**. Under **Build and deployment**, choose **Deploy from a branch**, branch `main`, folder **`/docs`**, then **Save**.
-3. After a minute, the site is live at `https://YOUR-USERNAME.github.io/toonlight/`.
-4. **Lock your worker to your site** so other websites can't use up your free quota. On the worker, add a plain-text variable `ALLOWED_ORIGINS` with the value `https://YOUR-USERNAME.github.io,http://localhost:8000`.
+**Live site: [toonlight.pages.dev](https://toonlight.pages.dev)** (Cloudflare Pages). Every push to `main` redeploys it automatically within about a minute.
+
+**Cloudflare Pages (recommended, what Toonlight uses):**
+1. Push this project to a GitHub repository.
+2. In the Cloudflare dashboard: **Workers & Pages → Create → Pages → Import an existing Git repository**, pick the repo.
+3. Leave the build command empty and set the **build output directory** to `docs`. Deploy.
+4. The site is live at `https://YOUR-PROJECT.pages.dev`. Free: unlimited traffic, 500 deploys a month.
+
+**GitHub Pages (also works):** in the repo, **Settings → Pages → Deploy from a branch**, branch `main`, folder **`/docs`**. The site appears at `https://YOUR-USERNAME.github.io/toonlight/`.
+
+4. **Lock your worker to your site** so other websites can't use up your free quota. On the worker, add a plain-text variable `ALLOWED_ORIGINS` with the value `https://YOUR-PROJECT.pages.dev,http://localhost:8000`.
 
 ## Free-tier limits, honestly
 
@@ -143,7 +150,7 @@ Agent mode needs an account. Toonlight uses [Supabase](https://supabase.com) Aut
 1. Create a free Supabase project, then copy its **Project URL** and **publishable (anon) key** from *Project Settings → API* into `docs/js/config.js` (`SUPABASE_URL`, `SUPABASE_KEY`). Both are safe to publish.
 2. (Optional) For whole-web search in Agent mode, get a free key at tavily.com and add it to the Worker as a secret named `TAVILY_API_KEY` (Settings → Variables and Secrets).
 3. Put the same two values in `worker/worker.js` (`DEFAULT_SUPABASE_URL`, `DEFAULT_SUPABASE_KEY`) or as Worker variables `SUPABASE_URL` / `SUPABASE_KEY`. The Worker checks every Agent request with Supabase, so it can't be unlocked from the browser.
-4. In Supabase *Authentication → URL Configuration*, set the **Site URL** to your GitHub Pages address so confirmation and password-reset emails link back to the site.
+4. In Supabase *Authentication → URL Configuration*, set the **Site URL** to your site's address (and add it under Redirect URLs) so confirmation and password-reset emails link back to the site.
 5. For saved chats on every device, create the `chats` table with row-level security (run in the SQL editor):
 
 ```sql
@@ -164,7 +171,7 @@ revoke all on public.chats from anon;
 ## Project map
 
 ```
-docs/                  ← the website (GitHub Pages serves this folder)
+docs/                  ← the website (Cloudflare Pages serves this folder)
   index.html
   css/style.css
   js/config.js         ← put your worker address here
