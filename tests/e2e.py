@@ -61,10 +61,22 @@ with sync_playwright() as p:
     check(pg.evaluate('location.hash') == '#stella', 'URL remembers the character')
     pg.reload(); pg.wait_for_timeout(5000)
     check(pg.inner_text('#name') == 'Stella Nova', 'reload keeps Stella')
-    pg.click('#cast [data-id="kaito"]', no_wait_after=True); pg.wait_for_timeout(2500)
-    check(pg.locator('.msg.user').count() == 1, 'Kaito chat history kept after reload')
-    pg.click('#open-notebook'); pg.wait_for_timeout(500); pg.click('#clear'); pg.wait_for_timeout(500)
-    check(pg.locator('.msg.user').count() == 0 and pg.locator('.suggest button').count() == 3, 'clear chat works')
+    check(pg.locator('.msg.user').count() == 0, 'every visit starts a new chat')
+    check(pg.locator('#chat-list .chat-item').count() == 1 and 'Kaito' in pg.inner_text('#chat-list'), 'the earlier chat is saved in the Chats sidebar')
+    pg.click('#chat-list .chat-item >> nth=0'); pg.wait_for_timeout(2500)
+    check(pg.inner_text('#name') == 'Kaito Hayabusa' and pg.locator('.msg.user').count() == 1, 'opening a saved chat brings back its character and messages')
+    pg.click('#new-chat'); pg.wait_for_timeout(500)
+    check(pg.locator('.msg.user').count() == 0 and pg.locator('.suggest button').count() == 3, 'New chat starts fresh')
+    item = pg.locator('#chat-list .chat-item >> nth=0')
+    item.hover(); item.locator('button[title="Rename"]').click()
+    pg.fill('.chat-rename', 'Workout ideas'); pg.keyboard.press('Enter'); pg.wait_for_timeout(300)
+    check('Workout ideas' in pg.inner_text('#chat-list'), 'chats can be renamed')
+    item = pg.locator('#chat-list .chat-item >> nth=0')
+    item.hover(); item.locator('button[title="Delete"]').click(); pg.click('.chat-confirm .yes'); pg.wait_for_timeout(300)
+    check(pg.locator('#chat-list .chat-item').count() == 0, 'chats can be deleted')
+    pg.click('#history-toggle'); pg.wait_for_timeout(300)
+    check(pg.is_hidden('#history') and pg.evaluate("localStorage.getItem('toonlight:history-open')") == 'off', 'Chats sidebar can be hidden')
+    pg.click('#history-toggle'); pg.wait_for_timeout(300)
     check(not errors, f'no console errors in demo mode {errors[:3]}')
     pg.close()
 
@@ -117,7 +129,8 @@ with sync_playwright() as p:
     check(pg.locator('.quiz .quiz-opt').count() == 4 and '[quiz' not in pg.inner_text('#messages'), 'question shown as 4 answer buttons, tag hidden')
     check(pg.is_hidden('#score'), 'no score before the first answer')
     check('hard' in pg.inner_text('#window-title').lower(), 'title shows difficulty')
-    sent = pg.evaluate("JSON.parse(localStorage.getItem('toonlight:history:raven:quiz'))[0].text")
+    chat_msgs = "(() => { const id = window.__toonlight.chat.meta.id; return JSON.parse(localStorage.getItem('toonlight:chat:' + id)); })()"
+    sent = pg.evaluate(chat_msgs)[0]['text']
     check('stacks and queues' in sent and 'hard' in sent, 'quiz start message includes topic and level')
     right = pg.locator('.quiz >> nth=-1').locator('.quiz-opt', has_text='Last In First Out')
     right.click()
@@ -126,7 +139,7 @@ with sync_playwright() as p:
     pg.wait_for_function("document.querySelectorAll('.quiz').length >= 2", timeout=45000); pg.wait_for_timeout(300)
     qs = pg.evaluate("[...document.querySelectorAll('.quiz-q')].map(e => e.textContent)")
     check(len(set(qs)) == len(qs), 'next question arrives and is different')
-    hist = pg.evaluate("JSON.parse(localStorage.getItem('toonlight:history:raven:quiz')).filter(m => m.quiz).map(m => m.quiz)")
+    hist = [m['quiz'] for m in pg.evaluate(chat_msgs) if 'quiz' in m]
     wrong = 'ABCD'[(hist[-1]['answer'] + 1) % 4]
     pg.fill('#input', wrong.lower()); pg.keyboard.press('Enter')
     pg.wait_for_function("document.querySelectorAll('.quiz').length >= 3", timeout=45000); pg.wait_for_timeout(300)
@@ -141,9 +154,10 @@ with sync_playwright() as p:
     pg.wait_for_timeout(500)
     check('Correction' in pg.inner_text('.msg.bot >> nth=-1'), 'language reply with correction')
     check('Spanish' in pg.inner_text('#chat-mode'), 'language shown in header')
-    # --- back to chat keeps the earlier conversation ---
+    # --- switching mode starts a new chat; the others are in the sidebar ---
     pg.click('.mode[data-mode="chat"]'); pg.wait_for_timeout(400)
-    check(pg.locator('.msg.user').count() == 2, 'chat history kept per mode')
+    titles = pg.inner_text('#chat-list')
+    check(pg.locator('.msg.user').count() == 0 and 'Quiz: stacks and queues' in titles and 'Spanish practice' in titles, 'each mode gets its own saved chat')
     # --- documents: upload, ask, quiz from it ---
     import zipfile, io
     docx = io.BytesIO()
@@ -200,7 +214,8 @@ with sync_playwright() as p:
     pg.evaluate("(() => { const r = JSON.parse(localStorage.getItem('toonlight:reminders')); r[0].at = Date.now() - 1000; localStorage.setItem('toonlight:reminders', JSON.stringify(r)); })()")
     pg.reload(); pg.wait_for_timeout(3500)
     check('math notes' in pg.inner_text('#messages') and 'Reminder' in pg.inner_text('#messages'), 'missed reminder shown on next visit')
-    check(pg.locator('.action').count() >= 4, 'action cards come back after reload')
+    pg.click('#chat-list .chat-item >> nth=0'); pg.wait_for_timeout(1500)
+    check(pg.locator('.action').count() >= 4, 'action cards come back when the saved chat is opened')
     pg.evaluate("(() => { const s = JSON.parse(localStorage.getItem('toonlight:session')); s.access_token = 'forged'; s.expires_at = Date.now() + 3600e3; localStorage.setItem('toonlight:session', JSON.stringify(s)); })()")
     pg.reload(); pg.wait_for_timeout(2500)
     pg.fill('#input', 'remind me in an hour about my math notes'); pg.keyboard.press('Enter')

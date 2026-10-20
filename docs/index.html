@@ -48,6 +48,10 @@
  <symbol id="i-clip" viewBox="0 0 24 24"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.3 3.3 0 0 1 4.7 4.7l-8.2 8.2a1.6 1.6 0 0 1-2.3-2.3l7.4-7.4"/></symbol>
       <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c1.2-4 4-6 7.5-6s6.3 2 7.5 6"/></symbol>
       <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+<symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M15.5 4.5l4 4L9 19H5v-4z"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></symbol>
       <symbol id="i-muted" viewBox="0 0 24 24"><path d="M4 9.5h4L13 5v14l-5-4.5H4z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></symbol>
     </defs>
   </svg>
@@ -90,14 +94,30 @@
   <main class="desk">
     <section class="window" aria-label="Toonlight app">
       <div class="titlebar">
-        <div class="lights" aria-hidden="true"><span class="l-red"></span><span class="l-yellow"></span><span class="l-green"></span></div>
+        <div class="title-left">
+          <div class="lights" aria-hidden="true"><span class="l-red"></span><span class="l-yellow"></span><span class="l-green"></span></div>
+          <button type="button" class="icon-btn" id="history-toggle" aria-controls="history" aria-expanded="true" aria-label="Hide chats" title="Chats">
+            <svg class="ico"><use href="#i-sidebar"/></svg>
+          </button>
+        </div>
         <p class="window-title" id="window-title">Toonlight</p>
         <button type="button" class="btn btn-small" id="open-notebook">
           <svg class="ico"><use href="#i-book"/></svg><span>Notebook</span>
         </button>
       </div>
 
-      <div class="panes">
+      <div class="panes with-history" id="panes">
+        <!-- saved chats -->
+        <aside class="history" id="history" aria-label="Chats">
+          <button type="button" class="btn btn-small btn-accent new-chat" id="new-chat">
+            <svg class="ico"><use href="#i-plus"/></svg><span>New chat</span>
+          </button>
+          <label class="sr-only" for="chat-search">Search chats</label>
+          <input type="search" class="chat-search" id="chat-search" placeholder="Search chats" autocomplete="off">
+          <nav class="chat-list" id="chat-list" aria-label="Saved chats"></nav>
+          <p class="history-note" id="history-note"></p>
+        </aside>
+        <div class="history-scrim" id="history-scrim" hidden></div>
         <!-- cast -->
         <aside class="sidebar" id="cast-panel" aria-label="Characters">
           <p class="hand side-label">Who do you want to talk to?</p>
@@ -143,6 +163,9 @@
         <!-- chat -->
         <section class="chat" aria-label="Conversation">
           <header class="chat-head">
+            <button type="button" class="icon-btn new-chat-mini" id="new-chat-2" aria-label="New chat" title="New chat">
+              <svg class="ico"><use href="#i-pencil"/></svg>
+            </button>
             <div class="chat-head-text">
               <h2 id="chat-title">Chat</h2>
               <p class="hand chat-mode" id="chat-mode">Just chat</p>
@@ -252,7 +275,7 @@
 
       <section class="nb-section">
         <h3>This conversation</h3>
-        <button type="button" class="btn btn-small" id="clear">Clear this chat</button>
+        <button type="button" class="btn btn-small" id="clear">Delete this chat</button>
       </section>
     </div>
   </aside>
@@ -290,7 +313,7 @@
     <span class="tape" aria-hidden="true"></span>
     <h2 id="help-title">How Toonlight works</h2>
     <ol>
-      <li>Pick a character on the left.</li>
+      <li>Pick a character. Every visit starts a new chat, and your past chats are in the Chats list on the left (synced to your account when you're signed in).</li>
       <li>Choose what to practice: a quiz (Easy, Medium or Hard), a mock interview, a new language, or just chat.</li>
       <li>Press the paperclip to upload notes or slides. They'll study it, answer questions from it and quiz you on it.</li>
       <li>Type or press the mic to talk. Switch to Voice to hear them answer out loud.</li>
