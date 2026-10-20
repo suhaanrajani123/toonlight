@@ -12,17 +12,24 @@
 
 **Study your own documents.** Press the paperclip next to the message box and pick a PDF, Word (.docx), PowerPoint (.pptx) or text file. It's read in your browser and kept there; for each question only the most relevant passages go to the AI, so long chapters work fine. Ask anything about it, or start *Quiz me* with **From my document** ticked to get questions written from different parts of it.
 
-**They can do things for you, too.** Sign in (free account), switch to **Agent**, and ask any character:
+**Agent mode: give them a goal.** Sign in (free account), switch to **Agent**, and ask for something that takes real work. The character plans the steps and uses tools one after another, and you watch each step as it happens ("Checking the weather in Newark", "Reading bbc.com", "Calculating…"):
 
-| You say | You get |
-|---|---|
-| "Remind me in an hour to finish my math notes" | A reminder that rings while Toonlight is open, plus one-click *Add to Google Calendar* for your phone |
-| "Add a study session Friday at 4pm to my calendar" | Google Calendar opens with the event filled in (or an `.ics` file for Apple/Outlook) |
-| "WhatsApp Rahul that I won't make it to class" | WhatsApp opens with the message written and ready; you can edit it first. Save numbers under *Contacts* in the Notebook |
-| "Find me a wireless mouse on Amazon" | Amazon (or Walmart, Target, Best Buy) search results for exactly that |
-| "Libraries near NJIT" / "YouTube videos on recursion" | Google Maps / YouTube / Google search |
+| Tool | What it does | Free source |
+|---|---|---|
+| Web search | Finds current information | [Tavily](https://tavily.com) (free key, 1,000/month); without a key: Wikipedia + news |
+| Read a page | Opens any link and reads it | the page itself |
+| Wikipedia, news | Looks things up, latest headlines | Wikipedia, Google News RSS |
+| Weather, local time | Current weather, 5-day forecast, time anywhere | Open-Meteo |
+| Places | Finds places and addresses | OpenStreetMap |
+| Currency | Today's exchange rates | Frankfurter (ECB) |
+| Calculator | Exact math, no guessing | built in |
+| Images | Draws a picture from a description | Workers AI (FLUX) |
+| Files | Notes, plans, spreadsheets (CSV), calendar files to download | built in |
+| Actions | Reminders, calendar events, WhatsApp/text/email, shopping, maps | see below |
 
-Nothing happens without you: every action is a card with a button you press. Amazon can't be ordered from automatically (there's no customer ordering API), and WhatsApp has no official way to send from a personal account, so Toonlight gets everything ready and you tap *Send* or *Buy*.
+Actions still need you: every action is a card with a button you press. Amazon can't be ordered from automatically (there's no customer ordering API), and WhatsApp has no official way to send from a personal account, so Toonlight gets everything ready and you tap *Send* or *Buy*.
+
+**Your chats are saved.** Every visit starts a new chat, and earlier ones are listed in the **Chats** sidebar (Today, Yesterday, Previous 7 days…) where you can search, rename or delete them. Opening one brings back its character and mode. Signed out, chats stay in that browser; signed in, they're saved to your account (a Supabase table that only you can read) and appear on every device you sign in on.
 
 The characters also **remember you**: your name, your goals, and facts you share. They're saved in the **Notebook** (top right), only in your browser, and you can edit or delete anything there.
 
@@ -134,8 +141,25 @@ Large files make the site slow to load. Aim for under 20 MB per model (Blender's
 Agent mode needs an account. Toonlight uses [Supabase](https://supabase.com) Auth with email and password:
 
 1. Create a free Supabase project, then copy its **Project URL** and **publishable (anon) key** from *Project Settings → API* into `docs/js/config.js` (`SUPABASE_URL`, `SUPABASE_KEY`). Both are safe to publish.
-2. Put the same two values in `worker/worker.js` (`DEFAULT_SUPABASE_URL`, `DEFAULT_SUPABASE_KEY`) or as Worker variables `SUPABASE_URL` / `SUPABASE_KEY`. The Worker checks every Agent request with Supabase, so it can't be unlocked from the browser.
-3. In Supabase *Authentication → URL Configuration*, set the **Site URL** to your GitHub Pages address so confirmation and password-reset emails link back to the site.
+2. (Optional) For whole-web search in Agent mode, get a free key at tavily.com and add it to the Worker as a secret named `TAVILY_API_KEY` (Settings → Variables and Secrets).
+3. Put the same two values in `worker/worker.js` (`DEFAULT_SUPABASE_URL`, `DEFAULT_SUPABASE_KEY`) or as Worker variables `SUPABASE_URL` / `SUPABASE_KEY`. The Worker checks every Agent request with Supabase, so it can't be unlocked from the browser.
+4. In Supabase *Authentication → URL Configuration*, set the **Site URL** to your GitHub Pages address so confirmation and password-reset emails link back to the site.
+5. For saved chats on every device, create the `chats` table with row-level security (run in the SQL editor):
+
+```sql
+create table public.chats (
+  id text primary key, user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  character text not null, mode text not null default 'chat', title text not null default 'New chat',
+  meta jsonb not null default '{}', messages jsonb not null default '[]',
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+alter table public.chats enable row level security;
+create policy "read own chats" on public.chats for select to authenticated using ((select auth.uid()) = user_id);
+create policy "add own chats" on public.chats for insert to authenticated with check ((select auth.uid()) = user_id);
+create policy "change own chats" on public.chats for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "delete own chats" on public.chats for delete to authenticated using ((select auth.uid()) = user_id);
+revoke all on public.chats from anon;
+```
 
 ## Project map
 
@@ -157,11 +181,13 @@ docs/                  ← the website (GitHub Pages serves this folder)
   js/quiz.js           ← quiz tags, shuffling, answer checking, no-repeat memory
   js/docs.js           ← reads PDF/Word/PowerPoint/text, finds the relevant passages
   js/auth.js           ← Supabase sign-in
+  js/history.js        ← saved chats: this browser + your account
   js/vrm.js            ← loads your own .vrm / .glb models
   models/              ← put your model files here
   dev/                 ← preview.html (one character) and model-test.html (loader self-test)
   vendor/              ← Three.js, three-vrm and pdf.js (open source), included so nothing breaks
 worker/worker.js       ← the AI server (personalities live here)
+worker/agent.js        ← Agent mode: the tool loop and the tools
 tests/                 ← automated tests (node tests/worker.test.mjs, node tests/units.test.mjs, python3 tests/e2e.py)
 ```
 
