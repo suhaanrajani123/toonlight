@@ -111,3 +111,21 @@ export async function handleRedirect() {
 }
 
 export const currentUser = () => session?.user || null;
+
+// ---------- sign in with Google / GitHub / Facebook ----------
+
+// Which of these are switched on in the Supabase project (Authentication → Providers).
+export async function oauthProviders() {
+  if (!authConfigured()) return [];
+  try {
+    const d = await fetch(`${base()}/settings`, { headers: { apikey: CONFIG.SUPABASE_KEY } }).then((r) => r.json());
+    return ['google', 'github', 'facebook'].filter((p) => d.external?.[p]);
+  } catch {
+    return [];
+  }
+}
+
+// Go to Google/GitHub/Facebook; they send you back here signed in (handled by handleRedirect).
+export function signInWith(provider) {
+  location.href = `${base()}/authorize?provider=${encodeURIComponent(provider)}&redirect_to=${encodeURIComponent(siteUrl())}`;
+}

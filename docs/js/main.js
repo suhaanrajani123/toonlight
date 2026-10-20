@@ -14,6 +14,7 @@ import { describe, loadContacts, saveContacts, loadReminders, saveReminders, whe
 import { ACCEPT, addDoc, getDoc, listDocs, removeDoc, passagesFor, quizPassage } from './docs.js';
 import { letter, parseAnswer, askedBefore, rememberAsked, isRepeat, pickStyle } from './quiz.js';
 import { saveImage, getImage } from './media.js';
+import { oauthProviders, signInWith } from './auth.js';
 import { authConfigured, getSession, signIn, signUp, signOut, resetPassword, setNewPassword, handleRedirect, onAuthChange } from './auth.js';
 
 const $ = (id) => document.getElementById(id);
@@ -937,6 +938,7 @@ function setAuthState(st, msg = '', err = false) {
   $('auth-email').closest('.field').hidden = st === 'reset';
   $('auth-email').required = st !== 'reset';
   $('auth-pass-wrap').hidden = st === 'forgot';
+  $('oauth').classList.toggle('off', st === 'forgot' || st === 'reset');
   $('auth-pass').required = st !== 'forgot';
   $('auth-pass').autocomplete = st === 'signin' ? 'current-password' : 'new-password';
   $('auth-switch').textContent = st === 'signin' ? 'New here? Create an account' : 'Have an account? Sign in';
@@ -956,6 +958,18 @@ function openAuth(state) {
 }
 const closeAuth = () => { $('auth').hidden = true; };
 $('account-btn').addEventListener('click', () => openAuth());
+// Google / GitHub / Facebook buttons: only the ones switched on in Supabase are shown
+oauthProviders().then((list) => {
+  for (const b of document.querySelectorAll('.oauth-btn')) {
+    b.hidden = !list.includes(b.dataset.provider);
+    b.addEventListener('click', () => {
+      write('toonlight:return', JSON.stringify({ character: current?.id, mode: practice.mode }));
+      b.disabled = true;
+      signInWith(b.dataset.provider);
+    });
+  }
+  $('oauth').hidden = !list.length;
+});
 $('auth-close').addEventListener('click', closeAuth);
 $('auth-switch').addEventListener('click', () => setAuthState(authState === 'signin' ? 'signup' : 'signin'));
 $('auth-forgot').addEventListener('click', () => setAuthState('forgot'));
@@ -1501,6 +1515,15 @@ setInterval(scheduleReminders, 6 * 3600 * 1000);
   if (back === 'recovery') setTimeout(() => openAuth('reset'), 400);
   else if (back === 'signup') setTimeout(() => notice(`You're signed in${s?.user?.email ? ` as ${s.user.email}` : ''}. Agent mode is unlocked.`), 400);
   else if (back?.startsWith('error:')) setTimeout(() => notice(`Sign-in link problem: ${back.slice(6)}. Try again.`), 400);
+  // coming back from Google/GitHub/Facebook: return to where you were
+  try {
+    const ret = JSON.parse(read('toonlight:return', 'null'));
+    localStorage.removeItem('toonlight:return');
+    if (ret && back) {
+      if (ret.character && !location.hash) history.replaceState(null, '', `#${ret.character}`);
+      if (ret.mode && MODES.some((m) => m.id === ret.mode)) practice.mode = ret.mode;
+    }
+  } catch {}
   const docId = read('toonlight:doc', '');
   if (docId) activeDoc = await getDoc(docId);
 }

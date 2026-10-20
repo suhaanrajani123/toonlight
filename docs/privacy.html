@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Toonlight · Privacy</title>
+  <style>
+    :root { --ink: #111; --paper: #FBF6EC; --desk: #E9DFCC; --muted: #5a5248; }
+    @media (prefers-color-scheme: dark) { :root { --ink: #F2EDE3; --paper: #1A1A1D; --desk: #0F0F11; --muted: #b9b1a5; } }
+    body { margin: 0; background: var(--desk); color: var(--ink); font: 16px/1.6 system-ui, sans-serif; }
+    main { max-width: 760px; margin: 32px auto; padding: 28px 24px; background: var(--paper); border: 3px solid var(--ink); border-radius: 18px; box-shadow: 6px 6px 0 var(--ink); }
+    @media (max-width: 820px) { main { margin: 16px; } }
+    h1 { margin-top: 0; font-size: 1.8rem; }
+    h2 { font-size: 1.15rem; margin-top: 1.6em; }
+    a { color: inherit; }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Toonlight privacy policy</h1>
+  <p class="muted">Last updated October 20, 2026. Toonlight is a free, non-commercial student project by Suhaan Rajani.</p>
+
+  <h2>What Toonlight stores</h2>
+  <p><strong>In your browser only:</strong> your settings, the Notebook (name, goals, saved facts, contacts, reminders), documents you upload, pictures the agent makes, and chats while you're signed out. They never leave your device unless noted below, and you can delete them in the Notebook or by clearing your browser data.</p>
+  <p><strong>With your account (only if you sign in):</strong> your email address (and your name and profile picture if you sign in with Google, GitHub or Facebook) and your saved chats, so they appear on your other devices. They're stored with Supabase and protected so that only you can read them.</p>
+
+  <h2>What is sent to the AI</h2>
+  <p>To answer you, your recent messages, your Notebook name, goals and facts, and short passages from a document you're studying are sent to Toonlight's server on Cloudflare and to the AI model (Meta Llama on Cloudflare Workers AI). The server doesn't keep a copy. In Agent mode, the agent may look things up on public services (for example Wikipedia, news feeds, weather and map services) using only the words of your request.</p>
+
+  <h2>What we don't do</h2>
+  <p>No ads, no tracking or analytics, no selling or sharing of your data. Phone numbers and email addresses in your Contacts are never sent to the AI or to any server.</p>
+
+  <h2 id="delete">Deleting your data</h2>
+  <p>Chats: delete them one by one in the Chats sidebar, and they're removed from your account too. Everything stored in your browser: use "Forget everything" in the Notebook or clear your browser data. To delete your whole account and everything stored with it, including if you signed in with Facebook, Google or GitHub, contact the developer (below) from the email address you signed in with, and it will be deleted within 7 days.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or deletion requests: <a href="https://github.com/suhaanrajani123">github.com/suhaanrajani123</a>. <a href="./">Back to Toonlight</a></p>
+</main>
+</body>
+</html>

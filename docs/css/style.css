@@ -521,6 +521,14 @@ details.steps .steps-head { cursor: pointer; }
 .link { background: none; border: 0; padding: 0; cursor: pointer; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; color: var(--ink); }
 .pop-x { position: absolute; top: 10px; right: 12px; width: 30px; height: 30px; border: 2px solid var(--ink); border-radius: 8px; background: var(--cream); cursor: pointer; font-weight: 700; line-height: 1; }
 
+.oauth.off { display: none; }
+.oauth { display: grid; gap: 8px; margin: 4px 0 6px; }
+.oauth-btn { justify-content: center; gap: 10px; width: 100%; background: var(--paper); }
+.oauth-btn svg { width: 20px; height: 20px; flex: none; }
+.oauth-or { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; font-size: 0.82rem; color: var(--muted); }
+.oauth-or::before, .oauth-or::after { content: ''; flex: 1; border-top: 2px dashed var(--rule); }
+:root:not([data-theme='light']) .oauth-or::before, :root:not([data-theme='light']) .oauth-or::after { border-color: var(--beige); }
+
 /* Agent mode while signed out */
 .gate { margin: 6px 0 0 40px; padding: 14px 16px; background: var(--tint-soft); border: var(--line) solid var(--ink); border-radius: var(--wobble-sm); box-shadow: var(--shadow); max-width: 360px; }
 .gate h3 { font-size: 1.05rem; margin-bottom: 4px; }
