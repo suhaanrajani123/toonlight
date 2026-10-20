@@ -15,7 +15,7 @@ export const MODES = [
     field: null, start: null,
   },
   {
-    id: 'agent', label: 'Agent', note: 'Sign in, then ask them to do things: reminders, calendar events, messages and shopping.',
+    id: 'agent', label: 'Agent', note: 'Sign in, then give them a goal: research, live info, math, pictures, files, reminders, messages and more.',
     field: null, start: null, auth: true,
   },
   {
@@ -38,8 +38,9 @@ export const modeById = (id) => MODES.find((m) => m.id === id) || MODES[0];
 
 // Suggestions shown in Agent mode (same for every character).
 export const AGENT_PROMPTS = [
-  'Remind me in an hour to finish my math notes',
-  'Add a study session to my calendar Friday at 4pm',
-  "WhatsApp Rahul that I won't make it to class",
-  'Find me a wireless mouse on Amazon',
+  "What's the weather in Newark this week, and should I bring an umbrella tomorrow?",
+  'Read the latest news about AI and give me the 3 biggest stories',
+  'Make me a 2-week study plan for my data structures final as a spreadsheet',
+  'Draw a cozy study desk at night in anime style',
+  'Convert 500 US dollars to Indian rupees and remind me in an hour to pay rent',
 ];

@@ -90,6 +90,7 @@ export async function ask(character, history, ctx = {}) {
       + ` (ISO ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')})`;
     try { body.tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch {}
   }
+  if (ctx.mode === 'agent') { clearTimeout(timer); return askAgent(body, ctx.onEvent || (() => {})); }
   let res;
   try {
     res = await fetch(CONFIG.API_URL, {
@@ -106,4 +107,62 @@ export async function ask(character, history, ctx = {}) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { const err = new ChatError(res.status, data.error || 'error'); err.code = data.code; throw err; }
   return { ...parseReply(data.reply || ''), sources: Array.isArray(data.sources) ? data.sources : [] };
+}
+
+// Agent mode streams its work: one JSON line per step ("Searching…", "Reading…"), then the answer.
+async function askAgent(body, onEvent) {
+  const ctrl = new AbortController();
+  let timer = setTimeout(() => ctrl.abort(), 60000);
+  let res;
+  try {
+    res = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
+  } catch (e) {
+    clearTimeout(timer);
+    throw new ChatError(0, e.name === 'AbortError' ? 'timeout' : 'network');
+  }
+  if (!res.ok) {
+    clearTimeout(timer);
+    const data = await res.json().catch(() => ({}));
+    const err = new ChatError(res.status, data.error || 'error');
+    err.code = data.code;
+    throw err;
+  }
+  // an older server answers in one piece instead of streaming steps
+  if (!/ndjson/.test(res.headers.get('content-type') || '')) {
+    clearTimeout(timer);
+    const data = await res.json().catch(() => ({}));
+    return { ...parseReply(data.reply || ''), sources: Array.isArray(data.sources) ? data.sources : [], images: [] };
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '', final = null;
+  const images = [];
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      clearTimeout(timer);
+      timer = setTimeout(() => ctrl.abort(), 60000); // still working: keep waiting
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        let ev;
+        try { ev = JSON.parse(line); } catch { continue; }
+        if (ev.type === 'image' && ev.image?.data?.startsWith('data:image/')) images.push(ev.image);
+        if (ev.type === 'error') throw new ChatError(ev.status || 502, ev.error || 'error');
+        if (ev.type === 'final') final = ev;
+        else onEvent(ev);
+      }
+    }
+  } catch (e) {
+    if (e instanceof ChatError) throw e;
+    throw new ChatError(0, e.name === 'AbortError' ? 'timeout' : 'network');
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!final) throw new ChatError(502, 'The agent stopped before finishing. Try again.');
+  return { ...parseReply(final.reply || ''), sources: Array.isArray(final.sources) ? final.sources : [], images };
 }

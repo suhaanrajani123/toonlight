@@ -20,6 +20,7 @@ const SEARCH = {
 };
 
 const enc = encodeURIComponent;
+const FILE_TYPES = { txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', html: 'text/html', json: 'application/json', ics: 'text/calendar' };
 const str = (v, max = 500) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 // ---------- reading the tag ----------
@@ -53,7 +54,7 @@ export function extractActions(raw) {
     const close = text.indexOf(']', end);
     text = text.slice(0, m.index) + text.slice(close === -1 ? end + 1 : close + 1);
   }
-  return { text, actions: actions.slice(0, 2) };
+  return { text, actions: actions.slice(0, 3) };
 }
 
 // Keep only known action types and fields, with sane lengths.
@@ -87,6 +88,13 @@ function clean(a) {
     const store = STORES[str(a.store, 12).toLowerCase()] ? str(a.store, 12).toLowerCase() : 'amazon';
     const query = str(a.query, 200);
     return query ? { type, store, query } : null;
+  }
+  if (type === 'file') {
+    const name = str(a.name, 80).replace(/[^\w .()-]/g, '_') || 'notes.txt';
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    const content = typeof a.content === 'string' ? a.content.slice(0, 20000) : '';
+    if (!content) return null;
+    return { type, name: FILE_TYPES[ext] ? name : `${name}.txt`, content };
   }
   if (type === 'map') { const query = str(a.query, 200); return query ? { type, query } : null; }
   if (type === 'search') {
@@ -242,6 +250,16 @@ export function describe(a, made, helpers) {
     return {
       kind: 'Shopping', title: a.query, detail: `Search results on ${STORE_NAMES[a.store]}. Check the price and reviews, then buy it there.`,
       buttons: [{ label: `Open ${STORE_NAMES[a.store]}`, href: STORES[a.store](enc(a.query)), primary: true }],
+    };
+  }
+  if (a.type === 'file') {
+    const ext = a.name.split('.').pop().toLowerCase();
+    const lines = a.content.split('\n');
+    return {
+      kind: `File · ${ext.toUpperCase()}`, title: a.name,
+      detail: `${lines.length} line${lines.length === 1 ? '' : 's'}${ext === 'csv' ? ' · opens in Excel or Google Sheets' : ''}`,
+      preview: lines.slice(0, 8).join('\n') + (lines.length > 8 ? '\n…' : ''),
+      buttons: [{ label: 'Download', primary: true, download: new Blob([ext === 'csv' ? '\ufeff' + a.content : a.content], { type: `${FILE_TYPES[ext] || 'text/plain'};charset=utf-8` }), filename: a.name }],
     };
   }
   if (a.type === 'map') {
