@@ -12,6 +12,8 @@
 // Optional variables: ALLOWED_ORIGINS (comma-separated sites allowed to use this worker),
 // GEMINI_MODEL (default gemini-3.8-flash), CF_MODEL (default Llama 3.3 70B on Workers AI).
 
+import { agentPrompt, runAgent, TOOL_NAMES } from './agent.js';
+
 const DEFAULT_MODEL = 'gemini-3.8-flash';
 const CF_MODELS = ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct'];
 
@@ -111,7 +113,7 @@ your {lang} reply. Do not use the [score] tag in this mode.`,
 
 const ACTIONS_RULE = `Actions: you can also help the user get things done. When the user clearly asks you to do one of the
 things below, reply with one or two short friendly sentences about what you've prepared, then put exactly ONE action
-tag at the very end of your reply, written as valid JSON on one line:
+tag at the very end of your reply (two if the task truly needs both), written as valid JSON on one line:
 - Reminder: [action: {"type":"reminder","text":"Finish the math notes","in_minutes":60}]
   (use "in_minutes" for "in an hour"/"in 20 minutes", or "at":"YYYY-MM-DDTHH:MM" in the user's local time for a clock time)
 - Calendar event: [action: {"type":"calendar","title":"Study group","start":"YYYY-MM-DDTHH:MM","minutes":60,"details":"Library, room 2"}]
@@ -122,7 +124,9 @@ tag at the very end of your reply, written as valid JSON on one line:
   ("store" can be "amazon", "walmart", "target", "bestbuy" or "google"; write a precise product search)
 - Directions or places: [action: {"type":"map","query":"coffee shops near NJIT"}]
 - Web or video search: [action: {"type":"search","site":"google","query":"how to solve quadratic equations"}] ("site" can be "google" or "youtube")
-Rules for actions:
+- A file to download (notes, a plan, a table, a list): [action: {"type":"file","name":"study-plan.csv","content":"Day,Topic\nMon,Arrays"}]
+  (name ends in .txt, .md, .csv, .html, .json or .ics; put the COMPLETE file in "content", with \n for new lines; CSV opens in Excel)
+Rules for actions (you may use up to 2 action tags when the task needs both, e.g. a file and a reminder):
 - The user confirms every action with a button, so never claim it's already done. Say something like "Here it is, tap the button to send it."
 - Write messages in the user's own voice (first person), friendly and ready to send.
 - If something essential is missing (who to message, what time, which product), ask one short question instead of guessing.
@@ -149,7 +153,8 @@ export function buildSystem(character, opts = {}) {
   }
   const modeName = opts.mode || 'chat';
   if (modeName === 'agent') {
-    parts.push(`MODE: AGENT. The user is signed in and wants you to help them get things done.\n${ACTIONS_RULE}`);
+    parts.push(`MODE: AGENT. The user is signed in. You are their capable personal agent: research, check live facts, plan, calculate,
+write, create images and files, and prepare actions for them. Work through tasks step by step with your tools.\n${ACTIONS_RULE}`);
   }
   if (opts.now) parts.push(`The user's current local date and time: ${opts.now}${opts.tz ? ` (time zone ${opts.tz})` : ''}. Use it to work out dates and times.`);
   const mode = MODES[modeName];
@@ -324,14 +329,14 @@ export async function verifyUser(env, token) {
 // ---------------- the worker ----------------
 
 // Workers AI (Cloudflare's built-in models). messages: [{role, text}] from the site.
-export async function callWorkersAI(env, system, messages) {
+export async function callWorkersAI(env, system, messages, maxTokens = 900) {
   const msgs = [{ role: 'system', content: system }];
   for (const m of messages.slice(-MAX_MESSAGES)) msgs.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text });
   const models = [env.CF_MODEL, ...CF_MODELS].filter(Boolean);
   let lastErr;
   for (const model of models) {
     try {
-      const out = await env.AI.run(model, { messages: msgs, max_tokens: 900, temperature: 0.8 });
+      const out = await env.AI.run(model, { messages: msgs, max_tokens: maxTokens, temperature: 0.8 });
       const text = typeof out === 'string' ? out
         : out?.response ?? out?.choices?.[0]?.message?.content ?? out?.output_text ?? '';
       if (text && String(text).trim()) return { text: String(text).trim(), sources: [] };
@@ -343,14 +348,48 @@ export async function callWorkersAI(env, system, messages) {
   throw lastErr || new Error('Workers AI returned no text');
 }
 
+// One reply from whichever AI is connected (Gemini if a key is set, else Workers AI). Used by the agent.
+async function complete(env, system, messages, maxTokens = 1500) {
+  if (env.GEMINI_API_KEY) {
+    try {
+      const res = await callGemini(env, system, toGeminiContents(messages), false);
+      if (res.ok) { const { text } = readGemini(await res.json()); if (text) return text; }
+    } catch {}
+    if (!env.AI) throw new Error('Could not reach the AI service.');
+  }
+  return (await callWorkersAI(env, system, messages, maxTokens)).text;
+}
+
+// Agent mode: run the tool loop, streaming each step to the website as a line of JSON.
+function agentResponse(env, body, system, headers, ctx) {
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const encoder = new TextEncoder();
+  const emit = (e) => writer.write(encoder.encode(`${JSON.stringify(e)}\n`)).catch(() => {});
+  const work = (async () => {
+    try {
+      const out = await runAgent({ env, system, messages: body.messages, complete: (sys, msgs) => complete(env, sys, msgs), emit });
+      await emit({ type: 'final', reply: out.reply, sources: out.sources, images: out.images.map((i) => ({ prompt: i.prompt })) });
+    } catch (e) {
+      const msg = String(e?.message || e);
+      const quota = /limit|quota|neurons|429|capacity/i.test(msg);
+      await emit({ type: 'error', status: quota ? 429 : 502, error: quota ? 'The free AI quota is used up for today.' : 'The agent had a problem. Try again in a moment.' });
+    } finally {
+      try { await writer.close(); } catch {}
+    }
+  })();
+  ctx?.waitUntil?.(work);
+  return new Response(readable, { status: 200, headers: { ...headers, 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' } });
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = request.headers.get('Origin') || '';
     const cors = corsHeaders(origin, env);
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors.headers });
-    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 5, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
+    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 6, tools: TOOL_NAMES, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
     if (request.method !== 'POST' || !['/chat', '/'].includes(url.pathname)) return json({ error: 'Not found' }, 404, cors.headers);
     if (!cors.ok) return json({ error: 'This website is not allowed to use this server.' }, 403, cors.headers);
     if (!env.GEMINI_API_KEY && !env.AI) return json({ error: 'Server has no AI connected. Add a Workers AI binding named AI (or a GEMINI_API_KEY secret).' }, 500, cors.headers);
@@ -371,6 +410,8 @@ export default {
       mode: body.mode, topic: body.topic, lang: body.lang, memory: body.memory, now: body.now, tz: body.tz,
       difficulty: body.difficulty, style: body.style, avoid: body.avoid, doc: body.doc,
     });
+
+    if (body.mode === 'agent') return agentResponse(env, body, `${system}\n\n${agentPrompt(env)}`, cors.headers, ctx);
 
     // 1) Gemini, if a key is set
     if (env.GEMINI_API_KEY) {
