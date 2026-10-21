@@ -104,12 +104,21 @@ function vrmArms(vrm) {
   };
 }
 
+// Sharper textures when seen at an angle (clothes folds, the side of the face).
+function sharpen(material) {
+  const seen = new Set();
+  const visit = (v) => { if (v?.isTexture && !seen.has(v)) { seen.add(v); v.anisotropy = 8; v.needsUpdate = true; } };
+  for (const v of Object.values(material)) visit(v);
+  for (const u of Object.values(material.uniforms || {})) visit(u?.value);
+}
+
 function prepare(scene) {
   scene.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true;
       o.receiveShadow = true;
       o.frustumCulled = false; // skinned meshes can vanish at the screen edge otherwise
+      [].concat(o.material).forEach(sharpen);
     }
   });
 }

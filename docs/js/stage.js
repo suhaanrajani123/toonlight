@@ -18,11 +18,15 @@ export function studio(renderer, scene) {
   pmrem.dispose();
 }
 
+const CLOSE_UP = 0.82; // how much closer the camera gets for model characters
+
 export class Stage {
   constructor(canvas) {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // draw at least 1.5x the screen's pixels (then scale down): sharper, smoother characters
+    // on ordinary laptop screens. Capped at 2x so big/high-DPI screens stay fast.
+    this.renderer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio, 1.5), 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
@@ -86,8 +90,10 @@ export class Stage {
     // small or narrow stages: step back and aim lower, so the character sits above the cast bar
     // narrow stages (phones): step back so the whole body fits the width
     const narrow = this.camera.aspect < 1.05;
-    const dist = narrow ? 6.9 / Math.max(this.camera.aspect, 0.6) : 6.6;
+    let dist = narrow ? 6.9 / Math.max(this.camera.aspect, 0.6) : 6.6;
     this.target.y = narrow ? 1.05 : 1.12;
+    // model characters (VRoid) have realistic proportions and small faces: step in closer
+    if (this.closeUp) { dist *= CLOSE_UP; this.target.y += 0.08; }
     this.camera.position.set(0, 1.45, dist);
     this.camera.lookAt(this.target);
     this.camera.updateProjectionMatrix();
@@ -103,6 +109,7 @@ export class Stage {
   show(rig) {
     if (this.rig) this.scene.remove(this.rig.root);
     this.rig = rig;
+    if (this.closeUp !== !!rig.isModel) { this.closeUp = !!rig.isModel; this.resize(); }
     this.scene.add(rig.root);
     this.entrance = 0; // play a little pop-in
   }
