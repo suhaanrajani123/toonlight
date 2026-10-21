@@ -103,6 +103,9 @@ function buildCast() {
     b.querySelector('.what').textContent = c.tagline.split('.')[0];
     b.title = c.tagline;
     b.addEventListener('click', () => select(c.id));
+    // start downloading the model as soon as you point at (or touch) a character
+    b.addEventListener('pointerenter', () => rigFor(c), { once: true });
+    b.addEventListener('pointerdown', () => rigFor(c), { once: true });
     els.cast.append(b);
   }
   setTimeout(drawPortraits, 250);
@@ -112,7 +115,9 @@ async function drawPortraits(only) {
   for (const c of ROSTER) {
     if (only && c.id !== only) continue;
     const face = els.cast.querySelector(`[data-id="${c.id}"] .face`);
-    face.style.backgroundImage = `url(${portrait(await makeRig(c))})`;
+    // a ready-made picture, unless you've given this character your own model
+    const pic = c.portrait && !(await getModel(c.id)) ? c.portrait : portrait(await makeRig(c));
+    face.style.backgroundImage = `url(${pic})`;
     await new Promise((r) => setTimeout(r, 30));
   }
   renderChatList(); // the chat list shows these faces too
@@ -138,8 +143,12 @@ async function select(id, { keepChat = false } = {}) {
   else startNewChat();               // a different character = a new chat
   refreshModelStatus();
 
+  const loading = setTimeout(() => current === c && els.stage.classList.add('loading'), 250);
+  els.stage.dataset.loading = `Loading ${c.short}…`;
   const rig = await rigFor(c);
+  clearTimeout(loading);
   if (current !== c) return;
+  els.stage.classList.remove('loading');
   stage.show(rig);
   rig.setMood('happy');
   setTimeout(() => current === c && rig.gesture?.('wave'), 350);

@@ -189,6 +189,12 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; letter-spacing: -0.0
   box-shadow: inset 0 -10px 0 color-mix(in srgb, var(--shade) 4%, transparent);
 }
 #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.stage.loading::before {
+  content: attr(data-loading); position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); z-index: 1;
+  font-family: var(--hand); font-size: 1.6rem; color: var(--ink-soft); pointer-events: none;
+  animation: loading-pulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes loading-pulse { from { opacity: 0.35; } to { opacity: 1; } }
 .stage.dropping::after {
   content: 'Drop the model to try it'; position: absolute; inset: 12px; display: grid; place-items: center;
   border: 3px dashed var(--ink); border-radius: var(--wobble); background: color-mix(in srgb, var(--paper) 75%, transparent);
