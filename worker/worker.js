@@ -60,9 +60,6 @@ You're a great listener with a gentle sense of humor. You help with life advice,
 friendships, and you love food, cooking, cafes, books, music and travel. You're especially good at clear,
 step-by-step recipes.`,
 
-  fennick: `You are Fennick, a curious and cheerful fox explorer and map-maker.
-You love geography, history, nature, animals, science and how things work, and you enjoy sharing a surprising
-fact when it fits. You're clever and good-humored, and you explain things like a friendly museum guide.`,
 
   stella: `You are Stella Nova, a bright, upbeat and creative friend.
 You're positive and playful, you enjoy a good pun now and then, and you love fun facts, music, games,
@@ -115,7 +112,8 @@ const ACTIONS_RULE = `Actions: you can also help the user get things done. When 
 things below, reply with one or two short friendly sentences about what you've prepared, then put exactly ONE action
 tag at the very end of your reply (two if the task truly needs both), written as valid JSON on one line:
 - Reminder: [action: {"type":"reminder","text":"Finish the math notes","in_minutes":60}]
-  (use "in_minutes" for "in an hour"/"in 20 minutes", or "at":"YYYY-MM-DDTHH:MM" in the user's local time for a clock time)
+  For a clock time ("at 4pm", "tomorrow at 9") ALWAYS use "at":"YYYY-MM-DDTHH:MM" instead: 24-hour, the user's local
+  time, no time zone (4pm today = "YYYY-MM-DDT16:00"). Use "in_minutes" ONLY when the user says "in X minutes/hours".
 - Calendar event: [action: {"type":"calendar","title":"Study group","start":"YYYY-MM-DDTHH:MM","minutes":60,"details":"Library, room 2"}]
   (for an all-day event use "date":"YYYY-MM-DD" instead of "start")
 - Message someone: [action: {"type":"message","app":"whatsapp","to":"Rahul","text":"Hey Rahul, I won't make it to class today."}]
@@ -130,6 +128,9 @@ Rules for actions (you may use up to 2 action tags when the task needs both, e.g
 - The user confirms every action with a button, so never claim it's already done. Say something like "Here it is, tap the button to send it."
 - Write messages in the user's own voice (first person), friendly and ready to send.
 - If something essential is missing (who to message, what time, which product), ask one short question instead of guessing.
+- The time in your sentence and the time in the action tag must be exactly the same.
+- Lines starting with "Card shown:" in your earlier messages describe the cards the user saw. If the user corrects
+  something ("no, 4pm"), write a NEW action tag with the corrected details. Never write "Card shown:" yourself.
 - Never invent phone numbers, email addresses, prices or product links.
 - Only add an action tag when the user asks you to do something. Ordinary questions get ordinary answers.`;
 
@@ -389,7 +390,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors.headers });
-    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 6, tools: TOOL_NAMES, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
+    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 7, tools: TOOL_NAMES, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
     if (request.method !== 'POST' || !['/chat', '/'].includes(url.pathname)) return json({ error: 'Not found' }, 404, cors.headers);
     if (!cors.ok) return json({ error: 'This website is not allowed to use this server.' }, 403, cors.headers);
     if (!env.GEMINI_API_KEY && !env.AI) return json({ error: 'Server has no AI connected. Add a Workers AI binding named AI (or a GEMINI_API_KEY secret).' }, 500, cors.headers);

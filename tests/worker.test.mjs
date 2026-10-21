@@ -75,7 +75,7 @@ assert.equal(res.status, 400);
 res = await worker.fetch(req(good), { GEMINI_API_KEY: '' });
 assert.equal(res.status, 500);
 res = await worker.fetch(req(undefined, '', 'GET', '/'), env);
-assert.equal((await res.json()).characters.length, 6);
+assert.equal((await res.json()).characters.length, 5);
 
 console.log('ok  cors + validation');
 
