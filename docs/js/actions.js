@@ -121,6 +121,62 @@ export function reminderTime(a, made = Date.now()) {
   return parseLocal(a.at);
 }
 
+// ---------- keeping the card's time and the reply's words in agreement ----------
+//
+// The AI sometimes says one time ("I've set it for 4pm") but writes another in the action tag,
+// especially when the user corrects a time. If the reply names exactly one clock time and the
+// card's time disagrees, the card follows the words: that's what the user just read.
+
+const CLOCK = /\b(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*([ap])\.?\s?m\b\.?|\b([01]?\d|2[0-3]):([0-5]\d)\b|\b(noon|midday|midnight)\b/gi;
+const RELATIVE = /\b(in|for)\s+(an?|one|\d+|half an?)\s*(min|minute|minutes|hr|hour|hours)\b|\bfrom now\b/i;
+const pad = (n) => String(n).padStart(2, '0');
+const localStamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+// Every clock time in a sentence, as minutes after midnight: "4pm" → 960, "16:30" → 990.
+export function clockTimes(text) {
+  const out = new Set();
+  for (const m of String(text || '').matchAll(CLOCK)) {
+    if (m[6]) { out.add(/midnight/i.test(m[6]) ? 0 : 720); continue; }
+    if (m[3]) {
+      const h = (+m[1] % 12) + (m[3].toLowerCase() === 'p' ? 12 : 0);
+      out.add(h * 60 + (+m[2] || 0));
+    } else out.add(+m[4] * 60 + +m[5]);
+  }
+  return [...out];
+}
+
+export function alignTimes(actions, text, made = Date.now()) {
+  const times = clockTimes(text);
+  if (times.length !== 1) return actions;
+  const [target] = times;
+  const move = (d) => { const n = new Date(d); n.setHours(Math.floor(target / 60), target % 60, 0, 0); return n; };
+  const off = (d) => d && d.getHours() * 60 + d.getMinutes() !== target;
+  return actions.map((a) => {
+    if (a.type === 'reminder') {
+      if (a.in_minutes && RELATIVE.test(text)) return a; // "in 20 minutes": the clock time is about something else
+      const t = reminderTime(a, made);
+      if (!off(t)) return a;
+      const { in_minutes, ...rest } = a;
+      return { ...rest, at: localStamp(move(t)) };
+    }
+    if (a.type === 'calendar' && a.start) {
+      const t = parseLocal(a.start);
+      return off(t) ? { ...a, start: localStamp(move(t)) } : a;
+    }
+    return a;
+  });
+}
+
+// One line describing a card, added to the chat history the AI sees, so it knows what the user
+// was actually shown (and can fix it when the user says "no, 4pm").
+export function cardNote(a, made) {
+  if (a.type === 'reminder') return `Card shown: reminder "${a.text}" ${when(reminderTime(a, made))}`;
+  if (a.type === 'calendar') return `Card shown: calendar event "${a.title}" ${a.start ? when(parseLocal(a.start)) : `on ${a.date}`}`;
+  if (a.type === 'message') return `Card shown: ${a.app} message to ${a.to || 'someone'}`;
+  if (a.type === 'file') return `Card shown: file ${a.name}`;
+  return `Card shown: ${a.type} "${a.query || ''}"`;
+}
+
 export function when(d) {
   if (!d) return '';
   const now = new Date();

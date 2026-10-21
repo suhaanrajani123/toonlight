@@ -10,7 +10,7 @@ import { newId, listChats, loadMessages, saveLocal, removeLocal, renameLocal, mi
 import { MODES, LANGS, modeById, langCode, AGENT_PROMPTS } from './modes.js';
 import { loadMemory, saveMemory, remember, memoryPayload } from './memory.js';
 import { saveModel, getModel, removeModel } from './models.js';
-import { describe, loadContacts, saveContacts, loadReminders, saveReminders, when } from './actions.js';
+import { describe, loadContacts, saveContacts, loadReminders, saveReminders, when, alignTimes } from './actions.js';
 import { ACCEPT, addDoc, getDoc, listDocs, removeDoc, passagesFor, quizPassage } from './docs.js';
 import { letter, parseAnswer, askedBefore, rememberAsked, isRepeat, pickStyle } from './quiz.js';
 import { saveImage, getImage } from './media.js';
@@ -671,8 +671,10 @@ async function send(text, { shown, quizAnswer = false } = {}) {
     const memo = [];
     for (const f of reply.remember || []) if (remember(memory, f)) memo.push(f);
     if (memo.length) { saveMemory(memory); renderMemory(); }
-    const actions = reply.actions?.length ? reply.actions : undefined;
-    const entry = { role: 'assistant', text: reply.text || (actions ? 'Here you go:' : reply.quiz ? (quizAnswer ? 'Next one:' : 'Here’s your question:') : '…'), sources: reply.sources, memo, actions, made: actions ? Date.now() : undefined };
+    const made = Date.now();
+    // the card's time must match the time the reply talks about
+    const actions = reply.actions?.length ? alignTimes(reply.actions, reply.text, made) : undefined;
+    const entry = { role: 'assistant', text: reply.text || (actions ? 'Here you go:' : reply.quiz ? (quizAnswer ? 'Next one:' : 'Here’s your question:') : '…'), sources: reply.sources, memo, actions, made: actions ? made : undefined };
     if (reply.quiz) entry.quiz = reply.quiz;
     if (steps?.length) entry.steps = steps.map(({ label, state }) => ({ label, ok: state !== 'fail' }));
     if (reply.images?.length) {

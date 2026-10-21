@@ -60,3 +60,29 @@ const seen = new Set(); const used = [];
 for (let i = 0; i < 3; i++) { const p = quizPassage(doc, used); assert.ok(!used.includes(p.index), 'never reuses a recent passage'); used.push(p.index); seen.add(p.index); }
 assert.equal(seen.size, 3);
 console.log('ok  document search + quiz passages\nall unit tests passed');
+
+// ---- reminder times follow the reply's words ----
+{
+  const { clockTimes, alignTimes, cardNote } = await import('../docs/js/actions.js');
+  assert.deepEqual(clockTimes('Set for 4pm today'), [960]);
+  assert.deepEqual(clockTimes('at 4:30 PM, then 16:30 again'), [990]);
+  assert.deepEqual(clockTimes('noon or 9 a.m.'), [720, 540]);
+  assert.deepEqual(clockTimes('in 20 minutes'), []);
+  const made = new Date(2026, 9, 21, 15, 38).getTime();
+  // the screenshot bug: text says 4pm, tag says 5pm (as a clock time, or as minutes from now)
+  let [a] = alignTimes([{ type: 'reminder', text: 'x', at: '2026-10-21T17:00' }], "I've set a reminder for 4pm today", made);
+  assert.equal(a.at, '2026-10-21T16:00');
+  [a] = alignTimes([{ type: 'reminder', text: 'x', in_minutes: 82 }], 'Reminder at 4pm, tap the button', made);
+  assert.equal(a.at, '2026-10-21T16:00'); assert.equal(a.in_minutes, undefined);
+  // left alone: matching time, relative times, or two different times
+  const ok = { type: 'reminder', text: 'x', at: '2026-10-21T16:00' };
+  assert.equal(alignTimes([ok], 'Set for 4pm', made)[0], ok);
+  const rel = { type: 'reminder', text: 'x', in_minutes: 60 };
+  assert.equal(alignTimes([rel], "I'll remind you in an hour, before your 6pm class", made)[0], rel);
+  const ev = { type: 'calendar', title: 'Study', start: '2026-10-22T15:00', minutes: 120 };
+  assert.equal(alignTimes([ev], 'Study group from 4pm to 6pm tomorrow', made)[0], ev);
+  assert.equal(alignTimes([ev], 'Study group tomorrow at 4pm', made)[0].start, '2026-10-22T16:00');
+  // the AI is told what each card said
+  assert.match(cardNote({ type: 'reminder', text: 'faizan ka khatna', at: '2026-10-21T17:00' }, made), /^Card shown: reminder "faizan ka khatna" .*5:00/);
+  console.log('ok  reminder time matches the reply');
+}

@@ -3,7 +3,7 @@
 
 import { CONFIG } from './config.js';
 import { MOOD_NAMES } from './toonkit.js';
-import { extractActions } from './actions.js';
+import { extractActions, cardNote } from './actions.js';
 import { extractQuiz } from './quiz.js';
 
 export const isDemo = () => !CONFIG.API_URL;
@@ -38,6 +38,7 @@ export function parseReply(raw) {
     .replace(/\[\s*remember\s*:\s*([^\]]{3,240})\]/gi, (_, f) => { remember.push(f.trim()); return ''; })
     .replace(/\[\s*score\s*:\s*(\d{1,3})\s*\/\s*(\d{1,3})\s*\]/gi, (_, a, b) => { score = { right: +a, total: +b }; return ''; })
     .replace(new RegExp(`\\[(${MOOD_NAMES.join('|')})\\]`, 'gi'), '')
+    .replace(/^\s*Card shown:.*$/gim, '') // the AI's notes about earlier cards, if it repeats them
     .replace(/\*\*?|__|`+|^#+\s*/gm, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -70,7 +71,10 @@ export async function ask(character, history, ctx = {}) {
   const timer = setTimeout(() => ctrl.abort(), 45000);
   const body = {
     character: character.id,
-    messages: history.slice(-CONFIG.HISTORY_TURNS).map(({ role, text }) => ({ role, text })),
+    // earlier action cards are described in words, so the AI knows what the user was shown
+    messages: history.slice(-CONFIG.HISTORY_TURNS).map(({ role, text, actions, made }) => ({
+      role, text: actions?.length ? `${text}\n${actions.map((a) => cardNote(a, made)).join('\n')}`.slice(0, 1900) : text,
+    })),
   };
   if (ctx.mode && ctx.mode !== 'chat') body.mode = ctx.mode;
   if (ctx.topic) body.topic = ctx.topic.slice(0, 120);
