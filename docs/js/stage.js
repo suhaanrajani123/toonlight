@@ -145,8 +145,10 @@ export function portrait(rig, size = 160) {
   rig.update(0, 0.016, { mouth: 0 });
   rig.root.updateMatrixWorld(true);
   const headY = rig.head.getWorldPosition(new THREE.Vector3()).y;
-  cam.position.set(0, headY + 0.1, 4.2);
-  cam.lookAt(0, headY - 0.05, 0);
+  // model characters (VRoid etc.) have smaller heads than the built-in ones: move in closer
+  const [dist, aim] = rig.isModel ? [2.6, 0.12] : [4.2, 0.05];
+  cam.position.set(0, headY + 0.1, dist);
+  cam.lookAt(0, headY - aim, 0);
   renderer.render(scene, cam);
   const url = canvas.toDataURL('image/png');
   scene.remove(rig.root);
