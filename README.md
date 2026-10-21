@@ -39,8 +39,7 @@ The characters also **remember you**: your name, your goals, and facts you share
 | Raven Ashford, night-market rogue | Anime | straight answers, news, street smarts |
 | Jun Arata, arcade tech kid | Anime | coding, gadgets, games |
 | Elara Quinn, calm city girl | Anime | life advice, studying, food and recipes |
-| Fennick, fox explorer | Cartoon | geography, history, nature, trivia |
-| Stella Nova, star-powered hype girl | Cartoon | jokes, fun facts, music, creative ideas |
+| Stella Nova, star-powered hype girl | Anime | jokes, fun facts, music, creative ideas |
 
 ## How it works
 
@@ -53,7 +52,7 @@ Your browser (Cloudflare Pages, free)              Cloudflare Worker (free)     
 └───────────────────────────────────┘            └─────────────────────────┘        └──────────────────────┘
 ```
 
-- **The characters** are built in code from simple shapes with realistic studio lighting, reflections and soft shadows (`docs/js/characters/`). They're placeholders: you can swap any of them for a real `.vrm` or `.glb` model (see *Use your own 3D models*). Want the flat anime-drawing look instead? Set `STYLE = 'toon'` in `docs/js/toonkit.js`.
+- **The characters** are VRoid Studio's free sample models (`docs/models/`, see *The 3D models* below), shrunk with `tools/slim-vrm.py`. The cast bar shows still pictures (`docs/models/portraits/`) so visitors only download a character's model when they pick it. If a model can't load, a simple built-in version made from shapes is shown instead (`docs/js/characters/`).
 - **"Worldwide information"** comes from Gemini's built-in knowledge plus **Google Search grounding**. When a question needs fresh facts, the model searches, and the site shows the sources under the reply. That's why you don't need RAG here.
 - **Voices** come in two free options. The *Standard* voices are built into your browser. The *HD* voices use Kokoro, an open-source voice model that runs inside the browser after a ~90 MB one-time download.
 - **Moods:** the AI starts each reply with a tag like `[happy]`, and the character's eyebrows, eyes and mouth change to match.
@@ -114,9 +113,21 @@ The AI runs on a free **Cloudflare Worker** using Cloudflare's built-in models (
 - **Change a voice:** edit `voice` in `docs/js/roster.js`. Standard voices take `pitch` (0–2) and `rate`. HD voices take a Kokoro voice name, such as `af_heart`, `af_bella`, `af_nicole`, `af_sky`, `am_adam`, `am_puck`, `am_fenrir`, `bf_emma`, `bm_george` or `bm_lewis`, plus `speed` and `pitch`.
 - **Change a character's look:** each one is a single file in `docs/js/characters/`. Open `docs/dev/preview.html?c=bloop&mood=happy` to preview one character on its own (try moods `happy`, `sad`, `angry`, `surprised` and `thinking`).
 
-## Use your own 3D models (recommended)
+## The 3D models
 
-The built-in characters are built from simple shapes. For a polished, professional look, make each one in **VRoid Studio**:
+| Character | Model | License |
+|---|---|---|
+| Kaito | VRoid AvatarSample_C | VRoid sample conditions: free use, commercial OK, no credit needed |
+| Raven | VRoid AvatarSample_B | same as above |
+| Jun | VRoid HairSample_Male | CC0 (public domain) |
+| Elara | VRoid Sendagaya Shino | CC0 |
+| Stella | VRoid Darkness Shibu | CC0 |
+
+To change one: shrink the new file with `python tools/slim-vrm.py new.vrm docs/models/kaito.vrm`, then redraw the cast pictures with `python tools/portraits.py` (instructions are at the top of each file).
+
+## Use your own 3D models
+
+You can also design your own characters in **VRoid Studio**:
 
 1. Download **VRoid Studio** (free) from vroid.com/en/studio and open it.
 2. Click **Create New**, pick a female or male base, and design the character: face, eyes, hair (there are presets you can tweak), body and outfit. Use the reference picture of the character next to you. Plan on about an hour per character.

@@ -43,18 +43,18 @@ with sync_playwright() as p:
     with_api(pg, '')  # demo mode
     pg.goto('http://localhost:8765/')
     pg.wait_for_function('[...document.querySelectorAll("#cast .face")].every(e => e.style.backgroundImage)', timeout=150000)
-    check(pg.locator('#cast .card').count() == 6, 'six characters in the cast')
+    check(pg.locator('#cast .card').count() == 5, 'five characters in the cast')
     check(pg.locator('#notice').is_visible() and 'Demo mode' in pg.inner_text('#notice'), 'demo-mode notice shown')
     check(pg.inner_text('#name') == 'Kaito Hayabusa', 'starts on Kaito')
-    bgs = pg.eval_on_selector_all('#cast .face', 'els => els.filter(e => e.style.backgroundImage.includes("data:image")).length')
-    check(bgs == 6, f'portraits rendered ({bgs}/6)')
+    bgs = pg.eval_on_selector_all('#cast .face', 'els => els.filter(e => /data:image|models\\/portraits\\//.test(e.style.backgroundImage)).length')
+    check(bgs == 5, f'portraits rendered ({bgs}/5)')
     pg.screenshot(path=f'{OUT}/01-desktop-demo.png')
     pg.click('.suggest button >> nth=0')
     pg.wait_for_timeout(1200)
     check(pg.locator('.msg.user').count() == 1 and pg.locator('.msg.bot').count() == 2, 'demo reply arrives')
     pg.wait_for_timeout(400)
     pg.screenshot(path=f'{OUT}/02-demo-reply.png')
-    for i, cid in enumerate(['raven', 'jun', 'elara', 'fennick', 'stella']):
+    for i, cid in enumerate(['raven', 'jun', 'elara', 'stella']):
         pg.click(f'#cast [data-id="{cid}"]', no_wait_after=True)
         pg.wait_for_timeout(1300)
         pg.screenshot(path=f'{OUT}/03-{cid}.png')
@@ -243,7 +243,7 @@ with sync_playwright() as p:
 
     # ---- phone ----
     pg = b.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
-    pg.goto('http://localhost:8765/#fennick'); pg.wait_for_timeout(2500)
+    pg.goto('http://localhost:8765/#elara'); pg.wait_for_timeout(2500)
     w = pg.evaluate('document.documentElement.scrollWidth')
     check(w <= 390, f'no sideways scroll on phone ({w}px)')
     pg.screenshot(path=f'{OUT}/05-phone.png')
