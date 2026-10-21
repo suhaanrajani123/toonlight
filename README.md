@@ -120,7 +120,7 @@ The built-in characters are built from simple shapes. For a polished, profession
 
 1. Download **VRoid Studio** (free) from vroid.com/en/studio and open it.
 2. Click **Create New**, pick a female or male base, and design the character: face, eyes, hair (there are presets you can tweak), body and outfit. Use the reference picture of the character next to you. Plan on about an hour per character.
-3. Click **Camera/Exporter** (top right), then **Export as VRM**. Choose VRM 1.0, set a title, and save the `.vrm` file.
+3. Click **Camera/Exporter** (top right), then **Export as VRM**. Either VRM 1.0 or VRM 0.0 works. Set a title, and save the `.vrm` file.
 4. On the site, select that character, open the **Notebook**, then **Use your own 3D model → Choose a model file**. You can also just drag the file onto the stage. It's saved in your browser and loads every visit.
 5. **To show it to everyone who visits:** put the file in `docs/models/`, add `model: 'models/kaito.vrm'` to that character in `docs/js/roster.js`, and push to GitHub. Keep files under about 20 MB (VRoid's export has a texture size option).
 
@@ -132,6 +132,8 @@ The built-in characters are built from simple shapes. For a polished, profession
 | Mouth moves with the voice | ✅ | ✅ if it has a morph target named `jawOpen`, `mouthOpen`, `viseme_aa` or `A` |
 | Blinking | ✅ | ✅ if it has `eyeBlinkLeft`/`eyeBlinkRight` or `blink` morphs |
 | Moods (happy, sad…) | ✅ | ✅ if morphs are named `happy`, `sad`, `angry`, `surprised` |
+| Hand gestures (wave, think, talking with hands, tada, shrug…) | ✅ | — |
+| Relaxed hands, breathing, hair and clothes physics | ✅ | — |
 | Idle animation | — | ✅ plays the model's `Idle` animation (or its first one) |
 
 **Where to get models (free):**
@@ -140,6 +142,8 @@ The built-in characters are built from simple shapes. For a polished, profession
 - **Mixamo**: free rigs and animations for humanoid models. Export as FBX, then convert to `.glb` in Blender (File, Import FBX, then Export glTF 2.0).
 
 Only use models you made yourself or whose license allows it, and **never** characters from existing anime, cartoons or games, even when a fan uploaded them as free downloads. That's someone else's copyrighted character.
+
+**Testing a model locally:** put it in `docs/dev/local-models/` (not uploaded to GitHub) and open `dev/preview.html?model=local-models/name.vrm&g=wave`.
 
 Large files make the site slow to load. Aim for under 20 MB per model (Blender's glTF export has a *Draco compression* option).
 

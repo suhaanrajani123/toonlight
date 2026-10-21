@@ -1,25 +1,26 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Character preview</title>
 <style>html,body{margin:0;height:100%;background:linear-gradient(#cfc4ff,#fff3e6)}canvas{width:100%;height:100%;display:block}</style>
-<script type="importmap">{"imports":{"three":"../vendor/three/three.module.js","three/addons/":"../vendor/three/addons/"}}</script>
+<script type="importmap">{"imports":{"three":"../vendor/three/three.module.js","three/addons/":"../vendor/three/addons/","three-vrm":"../vendor/three-vrm/three-vrm.module.min.js"}}</script>
 </head><body><canvas id="c"></canvas>
 <script type="module">
 // Dev tool: preview one character. Try ?c=stella&mood=happy&mouth=0.6&turn=0.5
+// ?model=local-models/you.vrm previews a .vrm/.glb model instead (put test files in dev/local-models/, not committed)
 import { Stage } from '../js/stage.js';
 const q = new URLSearchParams(location.search);
 const id = q.get('c') || 'kaito';
-const mod = await import(`../js/characters/${id}.js`);
 const stage = new Stage(document.getElementById('c'));
-const rig = mod.build();
+const rig = q.get('model') ? await (await import('../js/vrm.js')).loadModel(q.get('model')) : (await import(`../js/characters/${id}.js`)).build();
 rig.setMood(q.get('mood') || 'neutral');
 stage.show(rig);
 stage.entrance = 1; rig.root.scale.setScalar(1);
 const m = +(q.get('mouth') || 0); stage.mouthLevel = () => m;
-if (q.get('turn')) rig.headBase.y = +q.get('turn');
+if (q.get('turn') && rig.headBase) rig.headBase.y = +q.get('turn');
 // ?g=wave plays a gesture (?g=think holds the thinking pose)
 if (q.get('g') === 'think') rig.thinking = true;
 else if (q.get('g')) rig.gesture(q.get('g'));
 // ?ga=0.9 jumps the gesture to that many seconds in (screenshots on slow machines)
 if (q.get('ga')) setTimeout(() => rig.gestures.active.forEach((g) => (g.age = +q.get('ga'))), 300);
+window.__rig = rig;
 window.__ready = true;
 </script></body></html>
