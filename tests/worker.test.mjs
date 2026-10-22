@@ -188,3 +188,14 @@ for (const bad of [{ difficulty: 'insane' }, { style: 'riddle' }, { avoid: 'x' }
 }
 globalThis.fetch = realFetch;
 console.log('ok  quiz + documents\nall worker tests passed');
+
+// calendar setting: told to the AI, and only "auto" / "ask" are accepted
+{
+  const { buildSystem } = await import('../worker/worker.js');
+  assert.match(buildSystem('kaito', { calendar: 'auto' }), /added to their Google Calendar automatically/);
+  assert.match(buildSystem('kaito', { calendar: 'ask' }), /adds them to it with one tap/);
+  assert.doesNotMatch(buildSystem('kaito', {}), /Google Calendar automatically/);
+  const r = await worker.fetch(req({ ...good, calendar: 'always' }), env);
+  assert.equal(r.status, 400);
+  console.log('ok  calendar setting');
+}

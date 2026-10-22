@@ -125,7 +125,8 @@ tag at the very end of your reply (two if the task truly needs both), written as
 - A file to download (notes, a plan, a table, a list): [action: {"type":"file","name":"study-plan.csv","content":"Day,Topic\nMon,Arrays"}]
   (name ends in .txt, .md, .csv, .html, .json or .ics; put the COMPLETE file in "content", with \n for new lines; CSV opens in Excel)
 Rules for actions (you may use up to 2 action tags when the task needs both, e.g. a file and a reminder):
-- The user confirms every action with a button, so never claim it's already done. Say something like "Here it is, tap the button to send it."
+- The user confirms every action with a button (except calendar adding, when they've turned it on, see below), so never claim
+  it's already done. Say something like "Here it is, tap the button to send it."
 - Write messages in the user's own voice (first person), friendly and ready to send.
 - If something essential is missing (who to message, what time, which product), ask one short question instead of guessing.
 - The time in your sentence and the time in the action tag must be exactly the same.
@@ -157,6 +158,8 @@ export function buildSystem(character, opts = {}) {
     parts.push(`MODE: AGENT. The user is signed in. You are their capable personal agent: research, check live facts, plan, calculate,
 write, create images and files, and prepare actions for them. Work through tasks step by step with your tools.\n${ACTIONS_RULE}`);
   }
+  if (opts.calendar === 'auto') parts.push('The user connected Google Calendar with automatic adding: reminder and calendar actions you write are added to their Google Calendar automatically (they can undo it). So say "I\'m adding it to your Google Calendar" instead of asking them to tap a button.');
+  else if (opts.calendar === 'ask') parts.push('The user connected Google Calendar: reminder and calendar cards have a button that adds them to it with one tap.');
   if (opts.now) parts.push(`The user's current local date and time: ${opts.now}${opts.tz ? ` (time zone ${opts.tz})` : ''}. Use it to work out dates and times.`);
   const mode = MODES[modeName];
   if (mode && mode !== 'AGENT') {
@@ -246,6 +249,7 @@ function validate(body) {
   if (body.auth !== undefined && (typeof body.auth !== 'string' || body.auth.length > 4000)) return 'auth is invalid.';
   if (body.now !== undefined && (typeof body.now !== 'string' || body.now.length > 80)) return 'now must be a short string.';
   if (body.tz !== undefined && (typeof body.tz !== 'string' || body.tz.length > 60)) return 'tz must be a short string.';
+  if (body.calendar !== undefined && !['auto', 'ask'].includes(body.calendar)) return 'calendar must be "auto" or "ask".';
   const mem = body.memory;
   if (mem !== undefined) {
     if (typeof mem !== 'object' || mem === null) return 'memory must be an object.';
@@ -390,7 +394,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors.headers });
-    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 7, tools: TOOL_NAMES, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
+    if (request.method === 'GET') return json({ ok: true, service: 'toonlight', version: 8, tools: TOOL_NAMES, characters: Object.keys(PERSONAS), modes: Object.keys(MODES) }, 200, cors.headers);
     if (request.method !== 'POST' || !['/chat', '/'].includes(url.pathname)) return json({ error: 'Not found' }, 404, cors.headers);
     if (!cors.ok) return json({ error: 'This website is not allowed to use this server.' }, 403, cors.headers);
     if (!env.GEMINI_API_KEY && !env.AI) return json({ error: 'Server has no AI connected. Add a Workers AI binding named AI (or a GEMINI_API_KEY secret).' }, 500, cors.headers);
@@ -408,7 +412,7 @@ export default {
     }
 
     const system = buildSystem(body.character, {
-      mode: body.mode, topic: body.topic, lang: body.lang, memory: body.memory, now: body.now, tz: body.tz,
+      mode: body.mode, topic: body.topic, lang: body.lang, memory: body.memory, now: body.now, tz: body.tz, calendar: body.calendar,
       difficulty: body.difficulty, style: body.style, avoid: body.avoid, doc: body.doc,
     });
 
