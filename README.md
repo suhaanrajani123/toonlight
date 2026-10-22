@@ -96,7 +96,7 @@ The AI runs on a free **Cloudflare Worker** using Cloudflare's built-in models (
 3. Leave the build command empty and set the **build output directory** to `docs`. Deploy.
 4. The site is live at `https://YOUR-PROJECT.pages.dev`. Free: unlimited traffic, 500 deploys a month.
 
-**GitHub Pages (also works):** in the repo, **Settings → Pages → Deploy from a branch**, branch `main`, folder **`/docs`**. The site appears at `https://YOUR-USERNAME.github.io/toonlight/`.
+**GitHub Pages (also works):** in the repo, **Settings → Pages → Deploy from a branch**, branch `main`, folder **`/docs`**. The site appears at `https://YOUR-USERNAME.github.io/toonlight/`. (This copy forwards to toonlight.pages.dev, see the top of `docs/index.html`; remove that line if you host your own copy on GitHub Pages.)
 
 4. **Lock your worker to your site** so other websites can't use up your free quota. On the worker, add a plain-text variable `ALLOWED_ORIGINS` with the value `https://YOUR-PROJECT.pages.dev,http://localhost:8000`.
 
