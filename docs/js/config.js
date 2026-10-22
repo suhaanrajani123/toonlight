@@ -15,6 +15,11 @@ export const CONFIG = {
   SUPABASE_URL: 'https://uxanvmamhscakggttzvr.supabase.co',
   SUPABASE_KEY: 'sb_publishable_2v14fZCPaBFKG0itNmZdkQ_4IBPX7DE',
 
+  // Google Calendar: the "Toonlight web" OAuth client in Google Cloud (project toonlight).
+  // A client ID is public by design (it's in every Google sign-in link); there's no secret here.
+  // Its "Authorized JavaScript origins" must list the site's address. Leave empty to hide the feature.
+  GOOGLE_CLIENT_ID: '755076516361-hshkjt6e98pfjgu4jk4gj9pv6rc4hfj7.apps.googleusercontent.com',
+
   // How many past messages to send with each question (more = better memory, slower).
   HISTORY_TURNS: 12,
 

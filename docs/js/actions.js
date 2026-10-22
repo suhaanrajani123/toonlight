@@ -121,6 +121,21 @@ export function reminderTime(a, made = Date.now()) {
   return parseLocal(a.at);
 }
 
+// The Google Calendar event for a reminder or calendar action (null for other actions).
+// Reminders become a 15-minute event with a notification at that moment.
+export function eventFor(a, made) {
+  if (a.type === 'reminder') {
+    const at = reminderTime(a, made);
+    return at && { title: a.text, start: at, end: new Date(at.getTime() + 15 * 60000), alarm: 0 };
+  }
+  if (a.type === 'calendar') {
+    const start = parseLocal(a.start || a.date);
+    if (!start) return null;
+    return { title: a.title, start, end: new Date(start.getTime() + (a.minutes || 60) * 60000), allDay: !a.start, details: a.details, alarm: a.start ? 10 : 0 };
+  }
+  return null;
+}
+
 // ---------- keeping the card's time and the reply's words in agreement ----------
 //
 // The AI sometimes says one time ("I've set it for 4pm") but writes another in the action tag,
