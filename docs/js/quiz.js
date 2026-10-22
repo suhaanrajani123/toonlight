@@ -98,3 +98,25 @@ export function pickStyle(last) {
   const pool = STYLES.filter((s) => s !== last);
   return pool[Math.floor(Math.random() * pool.length)];
 }
+
+// ---------- what to quiz on, from what you typed ----------
+//
+// In Quiz me there's no topic box: you just say it ("quiz me on linked lists", "photosynthesis").
+// Returns { topic } for a new topic, { level: 'harder' | 'easier' } to change difficulty, or {}
+// to carry on with the current topic. While a quiz is already going, only a clear request
+// ("quiz me on…", "switch to…", "now do…") changes the topic, so asking a question mid-quiz doesn't.
+
+const CARRY_ON = /^(ok(ay)?|yes|yeah|yep|sure|go|go on|go ahead|start|begin|ready|next|next one|another|another one|one more|more|again|continue|keep going|skip|let'?s go|let'?s start|quiz me|test me)[\s.!?]*$/i;
+const ASK_FOR = /^(?:please\s+|can you\s+|could you\s+|now\s+)*(?:(?:quiz|test|ask)\s+me\s+(?:some\s+)?(?:questions\s+)?(?:on|about|in|over|from)|(?:switch|change)\s+(?:the\s+topic\s+)?to|(?:now|next)\s+(?:do|try)|let'?s\s+(?:do|try|practi[cs]e)|i\s+want\s+to\s+(?:be\s+quizzed\s+(?:on|about)|practi[cs]e|study|revise|learn)|i\s+want\s+a\s+quiz\s+(?:on|about)|help\s+me\s+(?:study|revise|practi[cs]e)|questions\s+(?:on|about)|a\s+quiz\s+(?:on|about))\s+(.+)$/i;
+const TAIL = /[\s,.!?]*(?:please|pls|thanks|thank you)?[\s.!?]*$/i;
+
+export function quizRequest(text, ongoing = false) {
+  const t = String(text || '').trim();
+  const level = /\b(harder|more difficult|tougher|challenge me)\b/i.test(t) ? 'harder' : /\b(easier|simpler|too hard)\b/i.test(t) ? 'easier' : null;
+  const out = level ? { level } : {};
+  if (CARRY_ON.test(t) || /^(make it |a |an )?(harder|easier|tougher|simpler)( one| please| questions)?[\s.!?]*$/i.test(t)) return out;
+  const asked = ASK_FOR.exec(t);
+  if (asked) return { ...out, topic: asked[1].replace(TAIL, '').trim().slice(0, 100) };
+  if (ongoing) return out; // a question or comment mid-quiz: keep the topic
+  return { ...out, topic: t.replace(TAIL, '').trim().slice(0, 100) };
+}
