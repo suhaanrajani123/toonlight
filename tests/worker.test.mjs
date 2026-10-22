@@ -199,3 +199,15 @@ console.log('ok  quiz + documents\nall worker tests passed');
   assert.equal(r.status, 400);
   console.log('ok  calendar setting');
 }
+
+// quiz background notes: used in the prompt, validated
+{
+  const { buildSystem } = await import('../worker/worker.js');
+  const bg = { title: 'Linked list', text: 'A linked list is a linear collection of data elements.', url: 'https://en.wikipedia.org/wiki/Linked_list' };
+  assert.match(buildSystem('jun', { mode: 'quiz', topic: 'linked lists', background: bg }), /Background notes on "Linked list"[\s\S]*linear collection/);
+  assert.doesNotMatch(buildSystem('jun', { mode: 'chat', background: bg }), /Background notes/);
+  assert.match(buildSystem('jun', { mode: 'quiz' }), /do NOT ask a quiz question yet/);
+  let r = await worker.fetch(req({ ...good, mode: 'quiz', topic: 'x', background: { title: 'x', text: 'y'.repeat(5000) } }), env);
+  assert.equal(r.status, 400);
+  console.log('ok  quiz background');
+}

@@ -122,16 +122,33 @@ with sync_playwright() as p:
     pg.keyboard.press('Escape'); pg.wait_for_timeout(500)
     check(not pg.evaluate("document.getElementById('notebook').classList.contains('open')"), 'Escape closes notebook')
     # --- quiz: difficulty, shuffled options, the site grades, no repeats ---
+    # a stand-in for Wikipedia (the site reads up on the topic first)
+    def wiki(route):
+        u = route.request.url
+        if 'list=search' in u:
+            body = '{"query":{"search":[{"title":"Stack (abstract data type)","snippet":"a stack and a queue are collections"}]}}'
+        else:
+            body = '{"query":{"pages":{"1":{"title":"Stack (abstract data type)","extract":"' + ('In computer science, a stack is a collection with push and pop; the last element added is the first removed (LIFO). ' * 4) + '"}}}}'
+        route.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'}, body=body)
+    pg.route('https://en.wikipedia.org/w/api.php**', wiki)
+    quiz_bodies = []
+    pg.on('request', lambda r: r.method == 'POST' and ':8787' in r.url and quiz_bodies.append(r.post_data or ''))
     pg.click('.mode[data-mode="quiz"]'); pg.wait_for_timeout(500)
-    check(pg.is_visible('#mode-setup') and pg.is_visible('#mode-field') and pg.is_visible('#mode-diff'), 'quiz setup shows topic + difficulty')
-    pg.fill('#mode-field', 'stacks and queues'); pg.select_option('#mode-diff', 'hard'); pg.click('#mode-start')
+    check(pg.is_visible('#mode-diff') and pg.is_hidden('#mode-field') and pg.is_hidden('#mode-start'), 'quiz has no topic bar, only the level')
+    check('What should I quiz you on' in pg.inner_text('.msg.bot >> nth=0') and pg.locator('#suggest button').count() == 0, 'character asks for a topic (no suggestion bubbles)')
+    pg.select_option('#mode-diff', 'hard')
+    pg.fill('#input', 'quiz me on stacks and queues please'); pg.keyboard.press('Enter')
     pg.wait_for_selector('.quiz .quiz-opt', timeout=45000); pg.wait_for_timeout(300)
+    import json as _j2
+    qb = _j2.loads(quiz_bodies[-1])
+    check(qb.get('topic') == 'stacks and queues' and qb.get('difficulty') == 'hard', 'topic taken from the typed message, level from the picker')
+    check(qb.get('background', {}).get('title') == 'Stack (abstract data type)' and 'LIFO' in qb['background']['text'], 'read up on the topic first (Wikipedia notes sent with the quiz)')
+    check('Background: Stack' in pg.inner_text('.msg.bot >> nth=-1'), 'the background source is shown')
     check(pg.locator('.quiz .quiz-opt').count() == 4 and '[quiz' not in pg.inner_text('#messages'), 'question shown as 4 answer buttons, tag hidden')
     check(pg.is_hidden('#score'), 'no score before the first answer')
     check('hard' in pg.inner_text('#window-title').lower(), 'title shows difficulty')
     chat_msgs = "(() => { const id = window.__toonlight.chat.meta.id; return JSON.parse(localStorage.getItem('toonlight:chat:' + id)); })()"
-    sent = pg.evaluate(chat_msgs)[0]['text']
-    check('stacks and queues' in sent and 'hard' in sent, 'quiz start message includes topic and level')
+    check('Quiz: stacks and queues' in pg.inner_text('#chat-list'), 'quiz chat named after the topic')
     right = pg.locator('.quiz >> nth=-1').locator('.quiz-opt', has_text='Last In First Out')
     right.click()
     pg.wait_for_selector('#score:not([hidden])', timeout=45000)
@@ -172,8 +189,8 @@ with sync_playwright() as p:
     pg.wait_for_function(f"document.querySelectorAll('.msg.bot:not(.typing)').length > {n0}", timeout=45000); pg.wait_for_timeout(300)
     check('Chlorophyll' in pg.inner_text('.msg.bot >> nth=-1'), 'answer uses the right part of the document')
     pg.click('.mode[data-mode="quiz"]'); pg.wait_for_timeout(400)
-    check(pg.is_visible('#mode-usedoc'), 'quiz offers "From my document"')
-    pg.check('#mode-usedoc'); pg.fill('#mode-field', ''); pg.click('#mode-start')
+    check(pg.is_visible('#doc-bar') and 'biology.docx' in pg.inner_text('.msg.bot >> nth=0'), 'Quiz me picks up the attached document')
+    pg.fill('#input', 'start'); pg.keyboard.press('Enter')
     pg.wait_for_selector('.quiz .quiz-opt', timeout=45000); pg.wait_for_timeout(300)
     check('from your document' in pg.inner_text('.quiz-q >> nth=-1'), 'quiz question written from the document')
     pg.click('#doc-off'); pg.wait_for_timeout(200)
@@ -188,6 +205,7 @@ with sync_playwright() as p:
     pg.fill('#auth-pass', 'secret123'); pg.click('#auth-submit')
     pg.wait_for_selector('#auth', state='hidden', timeout=10000); pg.wait_for_timeout(400)
     check('me@example.com' in pg.inner_text('#account-label') and pg.locator('.gate').count() == 0 and pg.is_enabled('#input'), 'signed in: Agent mode unlocked')
+    check(pg.locator('#suggest button').count() == 0, 'no suggestion bubbles in Agent mode')
     def say(t):
         n = pg.locator('.msg.bot').count()
         pg.fill('#input', t); pg.press('#input', 'Enter')

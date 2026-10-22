@@ -86,3 +86,23 @@ console.log('ok  document search + quiz passages\nall unit tests passed');
   assert.match(cardNote({ type: 'reminder', text: 'faizan ka khatna', at: '2026-10-21T17:00' }, made), /^Card shown: reminder "faizan ka khatna" .*5:00/);
   console.log('ok  reminder time matches the reply');
 }
+
+// ---- Quiz me: the topic comes from what you type ----
+{
+  const { quizRequest } = await import('../docs/js/quiz.js');
+  const { keyWords, relevant } = await import('../docs/js/background.js');
+  assert.deepEqual(quizRequest('quiz me on linked lists please'), { topic: 'linked lists' });
+  assert.deepEqual(quizRequest('photosynthesis'), { topic: 'photosynthesis' });
+  assert.deepEqual(quizRequest('I want to practice recursion'), { topic: 'recursion' });
+  assert.deepEqual(quizRequest('start'), {});
+  assert.deepEqual(quizRequest('next', true), {});
+  assert.deepEqual(quizRequest('make it harder', true), { level: 'harder' });
+  assert.deepEqual(quizRequest('what does LIFO mean?', true), {}, 'a question mid-quiz keeps the topic');
+  assert.deepEqual(quizRequest('now do binary trees', true), { topic: 'binary trees' });
+  assert.deepEqual(quizRequest('switch to the French Revolution', true), { topic: 'the French Revolution' });
+  assert.deepEqual(keyWords('CS114 stacks and queues'), ['stacks', 'queues']);
+  assert.ok(relevant('linked lists', 'Linked list'));
+  assert.ok(relevant('stacks and queues', 'Stack (abstract data type)', 'a stack and a <b>queue</b>'));
+  assert.ok(!relevant('photosynthesis', 'Photosystem', 'light reactions'));
+  console.log('ok  quiz topic from chat + background matching');
+}

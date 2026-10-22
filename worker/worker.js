@@ -164,13 +164,17 @@ write, create images and files, and prepare actions for them. Work through tasks
   const mode = MODES[modeName];
   if (mode && mode !== 'AGENT') {
     parts.push(mode
-      .replaceAll('{topic}', opts.doc ? `the document "${opts.doc.name}"${opts.topic ? ` (focus: ${opts.topic})` : ''}` : opts.topic || '(not chosen yet)')
+      .replaceAll('{topic}', opts.doc ? `the document "${opts.doc.name}"${opts.topic ? ` (focus: ${opts.topic})` : ''}` : opts.topic || '(not chosen yet: do NOT ask a quiz question yet; ask what they want to be quizzed on, or to attach a document with the paperclip)')
       .replaceAll('{lang}', opts.lang || 'Spanish')
       .replaceAll('{difficulty}', opts.difficulty || 'medium')
       .replaceAll('{style}', opts.style || 'any'));
     if (modeName === 'quiz' && opts.avoid?.length) {
       parts.push(`Questions already asked (do NOT repeat or reword any of these):\n${opts.avoid.map((q) => `- ${q}`).join('\n')}`);
     }
+  }
+  if (opts.background && modeName === 'quiz' && !opts.doc) {
+    parts.push(`Background notes on "${opts.background.title}" (from Wikipedia), read up before this quiz. Base your questions on
+these facts when they cover the topic; you may also use what you know, but never contradict them:\n\n${opts.background.text}`);
   }
   if (opts.doc) {
     const body = opts.doc.parts.map((p, i) => `[Part ${i + 1}${p.where ? `, ${p.where}` : ''}]\n${p.text}`).join('\n\n');
@@ -250,6 +254,11 @@ function validate(body) {
   if (body.now !== undefined && (typeof body.now !== 'string' || body.now.length > 80)) return 'now must be a short string.';
   if (body.tz !== undefined && (typeof body.tz !== 'string' || body.tz.length > 60)) return 'tz must be a short string.';
   if (body.calendar !== undefined && !['auto', 'ask'].includes(body.calendar)) return 'calendar must be "auto" or "ask".';
+  if (body.background !== undefined) {
+    const b = body.background;
+    if (!b || typeof b !== 'object' || typeof b.title !== 'string' || b.title.length > 200 || typeof b.text !== 'string' || b.text.length > 4000
+      || (b.url !== undefined && (typeof b.url !== 'string' || b.url.length > 300))) return 'background is invalid.';
+  }
   const mem = body.memory;
   if (mem !== undefined) {
     if (typeof mem !== 'object' || mem === null) return 'memory must be an object.';
@@ -412,7 +421,7 @@ export default {
     }
 
     const system = buildSystem(body.character, {
-      mode: body.mode, topic: body.topic, lang: body.lang, memory: body.memory, now: body.now, tz: body.tz, calendar: body.calendar,
+      mode: body.mode, topic: body.topic, lang: body.lang, memory: body.memory, now: body.now, tz: body.tz, calendar: body.calendar, background: body.background,
       difficulty: body.difficulty, style: body.style, avoid: body.avoid, doc: body.doc,
     });
 
