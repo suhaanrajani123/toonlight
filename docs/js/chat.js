@@ -87,6 +87,7 @@ export async function ask(character, history, ctx = {}) {
   }
   if (ctx.doc) body.doc = ctx.doc;
   if (ctx.auth) body.auth = ctx.auth;
+  if (ctx.calendar) body.calendar = ctx.calendar;
   if (!ctx.mode || ctx.mode === 'chat' || ctx.mode === 'agent') {
     // the current time, so "remind me in an hour" / "Friday at 4" can be worked out
     const now = new Date();

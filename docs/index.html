@@ -236,6 +236,18 @@
         <p class="nb-empty hand" id="docs-empty">No documents yet.</p>
       </section>
 
+      <section class="nb-section" id="gcal" hidden>
+        <h3>Google Calendar</h3>
+        <p class="nb-help" id="gcal-state"></p>
+        <div class="gcal-row">
+          <button type="button" class="btn btn-small btn-accent" id="gcal-connect">Connect Google Calendar</button>
+          <button type="button" class="btn btn-small" id="gcal-disconnect" hidden>Disconnect</button>
+        </div>
+        <label class="gcal-auto" id="gcal-auto-row" hidden><input type="checkbox" id="gcal-auto"> Add events automatically (you can always Undo)</label>
+        <p class="nb-help hand" id="gcal-msg" role="status"></p>
+        <p class="nb-help">Toonlight can only add, change or remove events, and only does it when you ask. Google's sign-in key stays in this browser tab; it's never sent to Toonlight's server.</p>
+      </section>
+
       <section class="nb-section">
         <h3>Reminders</h3>
         <p class="nb-help">Ask any character, like "remind me in an hour to finish my math notes". They ring here while Toonlight is open in a tab; add them to your calendar to get them on your phone.</p>

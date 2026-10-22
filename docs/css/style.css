@@ -701,3 +701,10 @@ details.steps .steps-head { cursor: pointer; }
 @media (min-width: 3000px) and (min-height: 1600px) {
   body { zoom: 1.6; height: calc(100% / 1.6); min-height: calc(100dvh / 1.6); }
 }
+
+/* Google Calendar (Notebook + cards) */
+.gcal-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.gcal-auto { display: flex; align-items: center; gap: 8px; font-size: 0.92rem; margin: 6px 0; }
+.gcal-auto input { width: 18px; height: 18px; accent-color: var(--tint); }
+.gcal-status { margin: 6px 0 8px; font-weight: 600; color: var(--ink); }
+.gcal-status:empty { display: none; }

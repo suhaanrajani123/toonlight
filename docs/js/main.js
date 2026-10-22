@@ -10,7 +10,8 @@ import { newId, listChats, loadMessages, saveLocal, removeLocal, renameLocal, mi
 import { MODES, LANGS, modeById, langCode, AGENT_PROMPTS } from './modes.js';
 import { loadMemory, saveMemory, remember, memoryPayload } from './memory.js';
 import { saveModel, getModel, removeModel } from './models.js';
-import { describe, loadContacts, saveContacts, loadReminders, saveReminders, when, alignTimes } from './actions.js';
+import { describe, loadContacts, saveContacts, loadReminders, saveReminders, when, alignTimes, eventFor } from './actions.js';
+import * as gcal from './gcal.js';
 import { ACCEPT, addDoc, getDoc, listDocs, removeDoc, passagesFor, quizPassage } from './docs.js';
 import { letter, parseAnswer, askedBefore, rememberAsked, isRepeat, pickStyle } from './quiz.js';
 import { saveImage, getImage } from './media.js';
@@ -510,7 +511,7 @@ function bubble(role, text, { sources = [], who, fresh, memo, actions, made, ent
   for (const img of entry?.images || []) li.append(imageCard(img));
   if (entry?.quiz) li.append(quizCard(entry));
   for (const a of actions || []) {
-    const card = actionCard(a, made);
+    const card = actionCard(a, made, { fresh, entry });
     if (card) li.append(card);
   }
   for (const f of memo || []) {
@@ -615,6 +616,8 @@ async function send(text, { shown, quizAnswer = false } = {}) {
 
   try {
     const ctx = { mode, topic: practice.topic, lang: practice.lang, memory: memoryPayload(memory) };
+    const cal = gcal.settings();
+    if (gcal.available() && cal.connected) ctx.calendar = cal.auto ? 'auto' : 'ask';
     const quizDoc = mode === 'quiz' && practice.useDoc && activeDoc;
     const qKey = quizDoc ? `doc:${activeDoc.id}` : `topic:${practice.topic || 'general'}`;
     let used = null;
@@ -1053,9 +1056,11 @@ function gestureFor(reply, text) {
 
 // ---------- actions: the card under a reply ----------
 
-function actionCard(a, made) {
+function actionCard(a, made, opts = {}) {
   const d = describe(a, made || Date.now(), { addReminder, hasReminder: (id) => reminders.some((r) => r.id === id) });
   if (!d) return null;
+  const ev = gcal.available() ? eventFor(a, made || Date.now()) : null;
+  if (ev) return calendarCard(a, made, d, ev, opts);
   const card = document.createElement('div');
   card.className = 'action';
   const k = document.createElement('p');
@@ -1129,6 +1134,112 @@ function actionCard(a, made) {
   }
   return card;
 }
+
+// ---------- Google Calendar: reminders and events go straight into your calendar ----------
+//
+// Connected + "add automatically" on: a new reminder/event card adds itself and shows
+// "In your Google Calendar ✓" with Open and Undo. Otherwise the card's main button adds it
+// (connecting Google first if needed). What was added is saved with the chat, so it never
+// gets added twice.
+
+function calendarCard(a, made, d, ev, { fresh, entry } = {}) {
+  const card = document.createElement('div');
+  card.className = 'action';
+  const k = Object.assign(document.createElement('p'), { className: 'action-kind', textContent: d.kind });
+  const t = Object.assign(document.createElement('p'), { className: 'action-title', textContent: d.title });
+  const detail = Object.assign(document.createElement('p'), { className: 'action-detail', textContent: d.detail });
+  const status = Object.assign(document.createElement('p'), { className: 'action-note gcal-status' });
+  status.setAttribute('role', 'status');
+  const row = Object.assign(document.createElement('div'), { className: 'action-buttons' });
+  card.append(k, t, detail, status, row);
+  gcal.preload();
+
+  const past = ev.start.getTime() < Date.now() - 60000 && !ev.allDay;
+  const save = () => { const ch = chat; if (entry && ch.messages.includes(entry)) persist(ch); };
+  const button = (label, run, primary) => {
+    const b = Object.assign(document.createElement('button'), { type: 'button', className: `btn btn-small${primary ? ' btn-accent' : ''}`, textContent: label });
+    b.addEventListener('click', () => run(b));
+    return b;
+  };
+  const link = (label, href) => Object.assign(document.createElement('a'), { className: 'btn btn-small', textContent: label, href, target: '_blank', rel: 'noopener noreferrer' });
+
+  async function add(btn) {
+    if (btn) btn.disabled = true;
+    status.textContent = 'Adding to your Google Calendar…';
+    try {
+      if (!gcal.hasToken()) await gcal.getToken(); // shows Google's window (needs the click)
+      a.gcal = await gcal.addEvent(ev);
+      save();
+      draw();
+    } catch (e) {
+      status.textContent = e.needsTap ? 'Tap “Add to my Google Calendar” to add it.' : e.message;
+      if (btn) btn.disabled = false;
+      if (!btn) draw(e.needsTap ? 'Tap “Add to my Google Calendar” to add it.' : e.message);
+    }
+  }
+  async function undo(btn) {
+    btn.disabled = true;
+    status.textContent = 'Removing it from your calendar…';
+    try {
+      if (!gcal.hasToken()) await gcal.getToken();
+      await gcal.removeEvent(a.gcal.id);
+      a.gcal = null;
+      save();
+      draw('Removed from your Google Calendar.');
+    } catch (e) { status.textContent = e.message; btn.disabled = false; }
+  }
+
+  function draw(note = '') {
+    row.replaceChildren();
+    if (a.gcal) {
+      status.textContent = a.type === 'reminder' ? `In your Google Calendar ✓ You'll get a notification ${when(ev.start)}.` : 'In your Google Calendar ✓';
+      row.append(link('Open in Google Calendar', a.gcal.link), button('Undo', undo));
+      return;
+    }
+    status.textContent = note || (past ? 'This time has already passed.' : '');
+    if (!past) row.append(button('Add to my Google Calendar', add, true));
+    // the old buttons stay as a backup (another calendar, or a reminder in this tab)
+    for (const b of d.buttons) {
+      if (b.href?.startsWith('https://calendar.google.com')) continue;
+      const el = b.run ? button(b.label, b.run) : Object.assign(document.createElement('a'), { className: 'btn btn-small', textContent: b.label, href: '#' });
+      if (b.run && b.done) el.disabled = true;
+      if (b.download) el.addEventListener('click', (e) => {
+        e.preventDefault();
+        const url = URL.createObjectURL(b.download);
+        Object.assign(document.createElement('a'), { href: url, download: b.filename }).click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      });
+      row.append(el);
+    }
+  }
+  draw();
+  // a brand-new card adds itself when you've turned that on
+  const s = gcal.settings();
+  if (fresh && !a.gcal && !past && s.connected && s.auto) add();
+  return card;
+}
+
+function renderCalendar() {
+  const s = gcal.settings();
+  const box = $('gcal');
+  if (!box) return;
+  box.hidden = !gcal.available();
+  $('gcal-state').textContent = s.connected
+    ? 'Connected. Reminders and events you ask for go into your Google Calendar, with a notification on your phone.'
+    : 'Not connected. Connect it and characters can put reminders and events straight into your Google Calendar.';
+  $('gcal-connect').hidden = s.connected;
+  $('gcal-disconnect').hidden = !s.connected;
+  $('gcal-auto-row').hidden = !s.connected;
+  $('gcal-auto').checked = s.auto;
+}
+$('gcal-connect')?.addEventListener('click', async () => {
+  $('gcal-msg').textContent = 'Opening Google…';
+  try { await gcal.connect(); $('gcal-msg').textContent = 'Connected ✓'; } catch (e) { $('gcal-msg').textContent = e.message; }
+  renderCalendar();
+});
+$('gcal-disconnect')?.addEventListener('click', () => { gcal.disconnect(); $('gcal-msg').textContent = 'Disconnected. Events already added stay in your calendar.'; renderCalendar(); });
+$('gcal-auto')?.addEventListener('change', (e) => { gcal.setAuto(e.target.checked); renderCalendar(); });
+gcal.warmUp();
 
 // ---------- reminders (work while this site is open in a tab) ----------
 
@@ -1252,7 +1363,11 @@ function autoGrow() {
   els.input.style.height = 'auto';
   els.input.style.height = `${Math.min(els.input.scrollHeight + 4, 150)}px`;
 }
-els.form.addEventListener('submit', (e) => { e.preventDefault(); send(els.input.value); });
+els.form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  gcal.renewIfNeeded(els.input.value); // during the click, so Google's quick check isn't blocked
+  send(els.input.value);
+});
 els.input.addEventListener('input', autoGrow);
 els.input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(els.input.value); }
@@ -1297,6 +1412,8 @@ function openNotebook() {
   renderReminders();
   renderContacts();
   renderDocs();
+  renderCalendar();
+  gcal.preload(); // so the Connect button can open Google's window straight away
   setTimeout(() => els.memName.focus(), 50);
 }
 function closeNotebook() {
