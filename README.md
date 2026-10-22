@@ -158,6 +158,19 @@ Only use models you made yourself or whose license allows it, and **never** char
 
 Large files make the site slow to load. Aim for under 20 MB per model (Blender's glTF export has a *Draco compression* option).
 
+## Google Calendar (free)
+
+Characters can put reminders and events straight into your Google Calendar. Connect it in the **Notebook → Google Calendar**; with "Add events automatically" on, a new reminder card adds itself and shows *In your Google Calendar ✓* with **Open** and **Undo**.
+
+How it works (`docs/js/gcal.js`): the browser uses Google's own sign-in popup (Google Identity Services) to get a one-hour key for the `calendar.events` permission, then calls the Google Calendar API directly. The key never reaches Toonlight's server. When it runs out, it's renewed during your next Send click on a message that sounds like a plan (Google only allows its popup during a click), or by the card's button.
+
+Setup (already done for toonlight.pages.dev):
+1. Google Cloud console, project *toonlight*: **APIs & Services → Library → Google Calendar API → Enable**.
+2. **Google Auth Platform → Data access → Add or remove scopes**: add `https://www.googleapis.com/auth/calendar.events`, then **Save**.
+3. **Clients → Toonlight web**: the site's address must be under *Authorized JavaScript origins*. Put the client ID in `docs/js/config.js` (`GOOGLE_CLIENT_ID`).
+
+Until Google verifies the app, people connecting see "Google hasn't verified this app" and click **Advanced → Go to Toonlight**, and at most 100 people can connect. To remove the warning, submit the app for verification in **Google Auth Platform → Verification center** (free; needs the privacy policy and a short demo video).
+
 ## Sign-in (Supabase, free)
 
 Agent mode needs an account. Toonlight uses [Supabase](https://supabase.com) Auth with email and password:

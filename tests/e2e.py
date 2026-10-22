@@ -206,19 +206,56 @@ with sync_playwright() as p:
     check('Running%20late' in last.locator('.action a.btn-accent').get_attribute('href'), 'edited message goes into the link')
     last = say('find a mouse on amazon')
     check(last.locator('.action a.btn-accent').get_attribute('href') == 'https://www.amazon.com/s?k=logitech%20wireless%20mouse', 'Amazon search link')
+    # --- Google Calendar: a stand-in for Google's sign-in popup and Calendar API ---
+    gcal_calls = []
+    pg.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(status=200, content_type='text/javascript', body="""
+      window.google = { accounts: { oauth2: {
+        initTokenClient: (cfg) => ({ requestAccessToken: () => setTimeout(() => cfg.callback({ access_token: 'gtok', expires_in: 3600 }), 20) }),
+        hasGrantedAllScopes: () => true, revoke: (t, cb) => cb && cb() } } };"""))
+    def fake_cal(route):
+        req = route.request
+        gcal_calls.append((req.method, req.post_data, req.headers.get('authorization')))
+        if req.method == 'POST':
+            return route.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'}, body='{"id":"ev%d","htmlLink":"https://calendar.google.com/calendar/event?eid=ev%d"}' % (len(gcal_calls), len(gcal_calls)))
+        if req.method == 'OPTIONS':
+            return route.fulfill(status=200, headers={'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*'})
+        route.fulfill(status=204, headers={'Access-Control-Allow-Origin': '*'})
+    pg.route('https://www.googleapis.com/calendar/v3/**', fake_cal)
+    sent_bodies = []
+    pg.on('request', lambda r: r.method == 'POST' and ':8787' in r.url and sent_bodies.append(r.post_data or ''))
     last = say('add a study session to my calendar')
-    check('calendar.google.com/calendar/render?action=TEMPLATE&text=Study%20session' in last.locator('.action a.btn-accent').get_attribute('href'), 'Google Calendar link')
+    check(last.locator('.action button.btn-accent').inner_text() == 'Add to my Google Calendar', 'calendar card offers to add it to Google Calendar')
+    last.locator('.action button.btn-accent').click()
+    pg.wait_for_function("document.querySelector('.msg.bot:last-of-type .gcal-status')?.textContent.includes('In your Google Calendar')", timeout=10000)
+    import json as _j
+    body = _j.loads(gcal_calls[0][1])
+    check(gcal_calls[0][0] == 'POST' and gcal_calls[0][2] == 'Bearer gtok' and body['summary'] == 'Study session' and body['reminders']['overrides'][0]['minutes'] == 10, 'event sent to Google Calendar with your key')
+    check(pg.evaluate("new Date(%s).getHours()" % _j.dumps(body['start']['dateTime'])) == 16 and pg.evaluate("new Date(%s).getDate()" % _j.dumps(body['start']['dateTime'])) == 23, 'event time is 4pm local on the right day')
+    check(last.locator('.action a', has_text='Open in Google Calendar').get_attribute('href').endswith('eid=ev1'), 'card links to the new event')
+    check(pg.evaluate("JSON.parse(localStorage.getItem('toonlight:gcal')).connected") is True, 'calendar remembered as connected')
     pg.context.grant_permissions(['notifications'])
     last = say('remind me in an hour about my math notes')
-    last.locator('.action button.btn-accent').click(); pg.wait_for_timeout(300)
+    pg.wait_for_function("document.querySelector('.msg.bot:last-of-type .gcal-status')?.textContent.includes('In your Google Calendar')", timeout=10000)
+    check(len(gcal_calls) == 2 and _j.loads(gcal_calls[1][1])['reminders']['overrides'][0]['minutes'] == 0, 'reminder added automatically, with a notification at that time')
+    check('"calendar":"auto"' in sent_bodies[-1], 'the AI is told events are added automatically')
+    last.locator('.action button', has_text='Undo').click()
+    pg.wait_for_function("document.querySelector('.msg.bot:last-of-type .gcal-status')?.textContent.includes('Removed')", timeout=10000)
+    check(gcal_calls[-1][0] == 'DELETE', 'Undo removes it from Google Calendar')
+    last.locator('.action button', has_text='Set reminder').click(); pg.wait_for_timeout(300)
     rem = pg.evaluate("JSON.parse(localStorage.getItem('toonlight:reminders'))")
     check(len(rem) == 1 and 55 < (rem[0]['at'] / 1000 - pg.evaluate('Date.now()') / 1000) / 60 < 61, 'reminder saved for an hour from now')
-    check('set' in last.locator('.action button.btn-accent').inner_text().lower(), 'reminder button confirms')
+    check('set' in last.locator('.action button', has_text='Reminder set').inner_text().lower(), 'reminder button confirms')
     pg.evaluate("(() => { const r = JSON.parse(localStorage.getItem('toonlight:reminders')); r[0].at = Date.now() - 1000; localStorage.setItem('toonlight:reminders', JSON.stringify(r)); })()")
     pg.reload(); pg.wait_for_timeout(3500)
     check('math notes' in pg.inner_text('#messages') and 'Reminder' in pg.inner_text('#messages'), 'missed reminder shown on next visit')
     pg.click('#chat-list .chat-item >> nth=0'); pg.wait_for_timeout(1500)
     check(pg.locator('.action').count() >= 4, 'action cards come back when the saved chat is opened')
+    check(pg.locator('.gcal-status', has_text='In your Google Calendar').count() == 1 and len(gcal_calls) == 3, 'added event remembered, not added twice')
+    pg.click('#open-notebook'); pg.wait_for_timeout(500)
+    check(pg.is_visible('#gcal') and 'Connected' in pg.inner_text('#gcal-state') and pg.is_checked('#gcal-auto'), 'Notebook shows Google Calendar connected, auto-add on')
+    pg.click('#gcal-disconnect'); pg.wait_for_timeout(200)
+    check(pg.evaluate("JSON.parse(localStorage.getItem('toonlight:gcal')).connected") is False and pg.is_visible('#gcal-connect'), 'Disconnect works')
+    pg.click('#close-notebook'); pg.wait_for_timeout(300)
     pg.evaluate("(() => { const s = JSON.parse(localStorage.getItem('toonlight:session')); s.access_token = 'forged'; s.expires_at = Date.now() + 3600e3; localStorage.setItem('toonlight:session', JSON.stringify(s)); })()")
     pg.reload(); pg.wait_for_timeout(2500)
     pg.fill('#input', 'remind me in an hour about my math notes'); pg.keyboard.press('Enter')
