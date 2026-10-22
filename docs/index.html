@@ -68,8 +68,6 @@
       Toonlight
     </a>
     <nav class="menu" aria-label="Main">
-      <button type="button" class="menu-item" data-go="cast">Characters</button>
-      <button type="button" class="menu-item" data-go="modes">Practice</button>
       <button type="button" class="menu-item" data-go="notebook">Notebook</button>
       <button type="button" class="menu-item" data-go="help">Help</button>
     </nav>
@@ -104,8 +102,9 @@
           <button type="button" class="icon-btn" id="history-toggle" aria-controls="history" aria-expanded="true" aria-label="Hide chats" title="Chats">
             <svg class="ico"><use href="#i-sidebar"/></svg>
           </button>
+          <div class="cast" id="cast" role="group" aria-label="Characters"></div>
         </div>
-        <p class="window-title" id="window-title">Toonlight</p>
+        <p class="window-title sr-only" id="window-title" aria-live="polite">Toonlight</p>
         <button type="button" class="btn btn-small" id="open-notebook">
           <svg class="ico"><use href="#i-book"/></svg><span>Notebook</span>
         </button>
@@ -123,16 +122,6 @@
           <p class="history-note" id="history-note"></p>
         </aside>
         <div class="history-scrim" id="history-scrim" hidden></div>
-        <!-- cast -->
-        <aside class="sidebar" id="cast-panel" aria-label="Characters">
-          <p class="hand side-label">Who do you want to talk to?</p>
-          <div class="cast" id="cast"></div>
-          <div class="side-foot">
-            <svg class="doodle d-heart" aria-hidden="true"><use href="#d-heart"/></svg>
-            <p class="hand">Characters remember you between visits.</p>
-          </div>
-        </aside>
-
         <!-- stage -->
         <section class="stage-pane" aria-label="Character stage">
           <div class="modes" id="modes" role="tablist" aria-label="What do you want to practice?"></div>
@@ -140,7 +129,6 @@
             <canvas id="scene" role="img" aria-label="3D character"></canvas>
             <div class="sticky" id="sticky">
               <span class="tape" aria-hidden="true"></span>
-              <p class="sticky-kind hand" id="kind"></p>
               <h1 id="name"></h1>
               <p class="sticky-tag" id="tagline"></p>
             </div>
@@ -218,14 +206,14 @@
         <button type="button" class="btn btn-small" id="close-notebook">Close</button>
       </header>
 
-      <section class="nb-section">
+      <section class="nb-section" hidden>
         <h3>About you</h3>
         <p class="nb-help">Every character uses this to remember you. It's saved only in this browser.</p>
         <label class="field"><span>Your name</span><input id="mem-name" type="text" maxlength="40" autocomplete="given-name" placeholder="What should they call you?"></label>
         <label class="field"><span>Your goals</span><textarea id="mem-goals" rows="2" maxlength="300" placeholder="e.g. Ace my data structures final, learn Japanese"></textarea></label>
       </section>
 
-      <section class="nb-section">
+      <section class="nb-section" hidden>
         <h3>Things they remember</h3>
         <p class="nb-help">Characters add notes here when you tell them something worth remembering.</p>
         <ul class="facts" id="facts"></ul>
@@ -233,7 +221,7 @@
         <button type="button" class="btn btn-small" id="forget-all">Forget everything</button>
       </section>
 
-      <section class="nb-section">
+      <section class="nb-section" hidden>
         <h3>Documents</h3>
         <p class="nb-help">Upload notes, a textbook chapter or slides with the paperclip by the message box. Characters study it, answer questions from it and can quiz you on it. Files are read and kept in this browser only.</p>
         <ul class="facts docs-list" id="docs-list"></ul>
@@ -252,14 +240,14 @@
         <p class="nb-help">Toonlight can only add, change or remove events, and only does it when you ask. Google's sign-in key stays in this browser tab; it's never sent to Toonlight's server.</p>
       </section>
 
-      <section class="nb-section">
+      <section class="nb-section" hidden>
         <h3>Reminders</h3>
         <p class="nb-help">Ask any character, like "remind me in an hour to finish my math notes". They ring here while Toonlight is open in a tab; add them to your calendar to get them on your phone.</p>
         <ul class="facts" id="reminders"></ul>
         <p class="nb-empty hand" id="reminders-empty">No reminders yet.</p>
       </section>
 
-      <section class="nb-section">
+      <section class="nb-section" hidden>
         <h3>Contacts</h3>
         <p class="nb-help">So "text Rahul I'm running late" goes straight to Rahul. Numbers stay in this browser and are never sent to the AI. Include the country code, like +1 for the US.</p>
         <ul class="facts" id="contacts"></ul>
@@ -349,7 +337,7 @@
       <li>Press the paperclip to upload notes or slides. They'll study it, answer questions from it and quiz you on it.</li>
       <li>Type or press the mic to talk. Switch to Voice to hear them answer out loud.</li>
       <li>Sign in to use Agent mode: give a goal and watch them work through it step by step. They can research, read links, check weather and news, do exact math, draw pictures, make files, set reminders and write messages. Anything that acts for you waits for your button press.</li>
-      <li>Open the Notebook to tell them about you, or give a character your own 3D model.</li>
+      <li>Characters remember what you tell them about yourself. Open the Notebook to connect Google Calendar, change voices, or give a character your own 3D model.</li>
     </ol>
     <p class="nb-help"><a href="privacy.html">Privacy policy</a></p>
     <button type="button" class="btn btn-small" id="close-help">Got it</button>

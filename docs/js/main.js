@@ -84,26 +84,17 @@ function rigFor(c) {
   return rigs.get(c.id);
 }
 
+// The five characters: round faces in the window's title bar (name on hover).
 function buildCast() {
-  let kind = null;
   for (const c of ROSTER) {
-    if (c.kind !== kind) {
-      kind = c.kind;
-      const g = document.createElement('p');
-      g.className = 'cast-group';
-      g.textContent = `${kind} crew`;
-      els.cast.append(g);
-    }
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'card';
     b.dataset.id = c.id;
     b.setAttribute('aria-pressed', 'false');
-    b.setAttribute('aria-label', `${c.name}, ${c.kind}`);
-    b.innerHTML = '<span class="face"></span><span class="txt"><span class="who"></span><span class="what"></span></span>';
-    b.querySelector('.who').textContent = c.short;
-    b.querySelector('.what').textContent = c.tagline.split('.')[0];
-    b.title = c.tagline;
+    b.setAttribute('aria-label', c.name);
+    b.innerHTML = '<span class="face"></span>';
+    b.title = `${c.short}: ${c.tagline}`;
     b.addEventListener('click', () => select(c.id));
     // start downloading the model as soon as you point at (or touch) a character
     b.addEventListener('pointerenter', () => rigFor(c), { once: true });
@@ -134,7 +125,6 @@ async function select(id, { keepChat = false } = {}) {
   document.documentElement.style.setProperty('--tint', c.theme.tint);
   stage.setTheme(c.theme.tint, document.documentElement.dataset.theme !== 'light', document.documentElement.dataset.theme);
   els.name.textContent = c.name;
-  els.kind.textContent = `${c.kind} character`;
   els.tagline.textContent = c.tagline;
   els.title.textContent = c.short;
   els.modelWho.textContent = c.short;
@@ -1486,7 +1476,7 @@ function openNotebook() {
   renderDocs();
   renderCalendar();
   gcal.preload(); // so the Connect button can open Google's window straight away
-  setTimeout(() => els.memName.focus(), 50);
+  setTimeout(() => $('close-notebook').focus(), 50);
 }
 function closeNotebook() {
   els.notebook.classList.remove('open');
@@ -1670,8 +1660,6 @@ document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click'
   const go = b.dataset.go;
   if (go === 'notebook') openNotebook();
   if (go === 'help') { els.help.hidden = false; $('close-help').focus(); }
-  if (go === 'cast') els.cast.querySelector('[aria-pressed="true"]')?.focus();
-  if (go === 'modes') els.modes.querySelector('[aria-selected="true"]')?.focus();
 }));
 $('close-help').addEventListener('click', () => (els.help.hidden = true));
 
