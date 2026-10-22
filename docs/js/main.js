@@ -7,13 +7,14 @@ import { Voice } from './voice.js';
 import { Listener } from './listen.js';
 import { ask, isDemo } from './chat.js';
 import { newId, listChats, loadMessages, saveLocal, removeLocal, renameLocal, migrateOld, titleFrom, groupLabel, pushChat, pullChats, deleteRemote, renameRemote, forgetAccount } from './history.js';
-import { MODES, LANGS, modeById, langCode, AGENT_PROMPTS } from './modes.js';
+import { MODES, LANGS, modeById, langCode } from './modes.js';
+import { backgroundFor } from './background.js';
 import { loadMemory, saveMemory, remember, memoryPayload } from './memory.js';
 import { saveModel, getModel, removeModel } from './models.js';
 import { describe, loadContacts, saveContacts, loadReminders, saveReminders, when, alignTimes, eventFor } from './actions.js';
 import * as gcal from './gcal.js';
 import { ACCEPT, addDoc, getDoc, listDocs, removeDoc, passagesFor, quizPassage } from './docs.js';
-import { letter, parseAnswer, askedBefore, rememberAsked, isRepeat, pickStyle } from './quiz.js';
+import { letter, parseAnswer, askedBefore, rememberAsked, isRepeat, pickStyle, quizRequest } from './quiz.js';
 import { saveImage, getImage } from './media.js';
 import { oauthProviders, signInWith } from './auth.js';
 import { authConfigured, getSession, signIn, signUp, signOut, resetPassword, setNewPassword, handleRedirect, onAuthChange } from './auth.js';
@@ -51,7 +52,7 @@ const practice = {                        // what we're practicing (shared acros
   topic: '',
   lang: read('toonlight:lang', 'Spanish'),
   difficulty: read('toonlight:difficulty', 'medium'),
-  useDoc: read('toonlight:usedoc', 'on') === 'on',
+  useDoc: true, // Quiz me always uses an attached document (remove it from the bar to quiz on a topic)
 };
 let activeDoc = null;                     // the document being studied (docs.js)
 let signedIn = false;                     // Supabase session present (auth.js)
@@ -59,7 +60,7 @@ let sessionUser = null;                   // { id, email } of the signed-in acco
 let lastStyle = null;                     // last quiz question style, so the next one differs
 const quizCards = new WeakMap();          // quiz entry → its card on screen
 if (!MODES.some((m) => m.id === practice.mode)) practice.mode = 'chat';
-practice.topic = read(`toonlight:topic:${practice.mode}`, '');
+practice.topic = practice.mode === 'quiz' ? '' : read(`toonlight:topic:${practice.mode}`, '');
 
 // ---------- characters & models ----------
 
@@ -192,7 +193,8 @@ function buildModes() {
 
 function setMode(id, { quiet, keepChat } = {}) {
   practice.mode = id;
-  practice.topic = read(`toonlight:topic:${id}`, '');
+  // Quiz me has no saved topic: each quiz chat gets its topic from what you type
+  practice.topic = id === 'quiz' ? '' : read(`toonlight:topic:${id}`, '');
   write('toonlight:mode', id);
   const m = modeById(id);
   els.modes.querySelectorAll('.mode').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === id)));
@@ -200,12 +202,13 @@ function setMode(id, { quiet, keepChat } = {}) {
   els.setup.hidden = !m.field;
   if (m.field) {
     els.setupLabel.textContent = m.field.label;
-    const isLang = m.field.kind === 'lang';
-    els.setupField.hidden = isLang;
+    const isLang = m.field.kind === 'lang', isLevel = m.field.kind === 'level';
+    els.setupField.hidden = isLang || isLevel;
     els.setupLang.hidden = !isLang;
-    els.setupLabel.htmlFor = isLang ? 'mode-lang' : 'mode-field';
+    $('mode-start').hidden = isLevel; // the level applies straight away
+    els.setupLabel.htmlFor = isLang ? 'mode-lang' : isLevel ? 'mode-diff' : 'mode-field';
     if (isLang) els.setupLang.value = practice.lang;
-    else {
+    else if (!isLevel) {
       els.setupField.placeholder = m.field.placeholder;
       els.setupField.value = practice.topic;
     }
@@ -213,9 +216,6 @@ function setMode(id, { quiet, keepChat } = {}) {
   const isQuiz = !!m.field?.quiz;
   $('mode-diff').hidden = !isQuiz;
   $('mode-diff').value = practice.difficulty;
-  $('mode-usedoc-wrap').hidden = !(isQuiz && activeDoc);
-  $('mode-usedoc').checked = practice.useDoc;
-  if (isQuiz && activeDoc && practice.useDoc) els.setupField.placeholder = 'Optional: a part to focus on';
   renderDocBar();
   if (current && !quiet) {
     voice.stop();
@@ -236,17 +236,22 @@ els.setup.addEventListener('submit', (e) => {
     els.setupField.value = practice.topic;
     write(`toonlight:topic:${practice.mode}`, practice.topic);
   }
-  if (m.field.quiz) {
-    practice.difficulty = $('mode-diff').value;
-    practice.useDoc = $('mode-usedoc').checked;
-    write('toonlight:difficulty', practice.difficulty);
-    write('toonlight:usedoc', practice.useDoc ? 'on' : 'off');
-  }
+  if (m.field.quiz) return; // Quiz me has no Start button
   updateTitles();
   // a fresh chat for the new topic/language
   startNewChat();
   send(m.start({ ...practice, useDoc: practice.useDoc && !!activeDoc, docName: activeDoc?.name }));
 });
+
+// Quiz level: changes the next question straight away.
+function setLevel(level) {
+  practice.difficulty = level;
+  $('mode-diff').value = level;
+  write('toonlight:difficulty', level);
+  if (chat.meta && chat.meta.mode === 'quiz') { chat.meta.difficulty = level; persist(chat); }
+  updateTitles();
+}
+$('mode-diff').addEventListener('change', (e) => { if (practice.mode === 'quiz') setLevel(e.target.value); });
 
 // The site keeps the quiz score itself, from the answers you picked.
 function quizScore(list = log) {
@@ -278,7 +283,7 @@ function startNewChat() {
 }
 
 function makeMeta(firstText) {
-  const extra = { topic: practice.topic, lang: practice.lang, docName: practice.mode === 'quiz' && practice.useDoc && activeDoc ? activeDoc.name : '' };
+  const extra = { topic: practice.topic, lang: practice.lang, docName: practice.mode === 'quiz' && activeDoc ? activeDoc.name : '' };
   return {
     id: newId(), character: current.id, mode: practice.mode,
     topic: practice.topic || '', lang: practice.mode === 'language' ? practice.lang : undefined,
@@ -317,11 +322,9 @@ async function openChat(id) {
   practice.topic = meta.topic || '';
   if (meta.lang) practice.lang = meta.lang;
   if (meta.difficulty) practice.difficulty = meta.difficulty;
-  practice.useDoc = !!meta.useDoc;
   els.setupField.value = practice.topic;
   els.setupLang.value = practice.lang;
   $('mode-diff').value = practice.difficulty;
-  $('mode-usedoc').checked = practice.useDoc;
   if (current?.id !== meta.character) await select(meta.character, { keepChat: true });
   updateTitles();
   showScore();
@@ -471,8 +474,13 @@ function greeting() {
   const m = modeById(practice.mode);
   if (practice.mode === 'agent') {
     return signedIn
-      ? `${current.greeting} Agent mode is on: I can set reminders, add calendar events, write messages for WhatsApp, text or email, and find things to buy. You confirm everything with a button.`
+      ? `${current.greeting} Agent mode is on. Tell me what you need: I can look things up, check the weather or news, do the math, draw pictures, make files, put reminders and events in your Google Calendar, and get messages ready to send.`
       : `${current.greeting} Agent mode lets me do things for you, like reminders, calendar events and messages. Sign in first to unlock it.`;
+  }
+  if (practice.mode === 'quiz') {
+    return activeDoc
+      ? `${current.greeting} I've got "${activeDoc.name}" ready. Say "start" and I'll quiz you on it, or tell me a part to focus on.`
+      : `${current.greeting} What should I quiz you on? Type a topic (like "CS114 linked lists"), paste your notes, or attach a document with the paperclip and I'll study it first.`;
   }
   if (practice.mode !== 'chat') {
     return practice.mode === 'language'
@@ -552,7 +560,8 @@ function renderMessages() {
 
 function renderSuggestions() {
   els.suggest.replaceChildren();
-  const list = practice.mode === 'chat' ? current.prompts : practice.mode === 'agent' && signedIn ? AGENT_PROMPTS : [];
+  // only in Just chat: in Agent and Quiz me they covered the conversation
+  const list = practice.mode === 'chat' ? current.prompts : [];
   if (log.length) return;
   for (const q of list) {
     const b = document.createElement('button');
@@ -621,6 +630,15 @@ async function send(text, { shown, quizAnswer = false } = {}) {
     }
   }
   if (practice.mode === 'agent' && !signedIn) { openAuth(); return; }
+  // Quiz me: a long paste is your notes. Save it as a document and quiz from it.
+  if (practice.mode === 'quiz' && !quizAnswer && text.length > 600) {
+    const stamp = new Date().toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const doc = await addDoc(new File([text], `Pasted notes ${stamp}.txt`, { type: 'text/plain' }));
+    await useDoc(doc);
+    renderDocs();
+    shown = `${text.slice(0, 220).trim()}…`;
+    text = 'Quiz me on my notes. Start with the first question.';
+  }
   busy = true;
   els.send.disabled = true;
   voice.stop();
@@ -629,6 +647,22 @@ async function send(text, { shown, quizAnswer = false } = {}) {
   const c = current, mode = practice.mode, ch = chat;
   const rig = await rigFor(c);
   if (!ch.meta) ch.meta = makeMeta(shown || text);
+  // Quiz me: the topic (and "harder"/"easier") come from what you type
+  let newTopic = false;
+  if (mode === 'quiz' && !quizAnswer) {
+    const r = quizRequest(text, !!practice.topic || !!activeDoc || log.some((m) => m.quiz));
+    if (r.level) {
+      const order = ['easy', 'medium', 'hard'];
+      const i = order.indexOf(practice.difficulty) + (r.level === 'harder' ? 1 : -1);
+      setLevel(order[Math.min(2, Math.max(0, i))]);
+    }
+    if (r.topic) {
+      newTopic = r.topic !== practice.topic;
+      practice.topic = ch.meta.topic = r.topic;
+      ch.meta.title = titleFrom('', 'quiz', { topic: activeDoc ? `${activeDoc.name} (${r.topic})` : r.topic });
+      updateTitles();
+    }
+  }
   ch.messages.push(shown ? { role: 'user', text, shown } : { role: 'user', text });
   persist(ch);
   bubble('user', shown || text, { fresh: true });
@@ -649,6 +683,12 @@ async function send(text, { shown, quizAnswer = false } = {}) {
     if (gcal.available() && cal.connected) ctx.calendar = cal.auto ? 'auto' : 'ask';
     const quizDoc = mode === 'quiz' && practice.useDoc && activeDoc;
     const qKey = quizDoc ? `doc:${activeDoc.id}` : `topic:${practice.topic || 'general'}`;
+    let readUp = null;
+    if (mode === 'quiz' && !quizDoc && practice.topic) {
+      // read up on the topic first (Wikipedia), so questions rest on checked facts
+      const bg = await backgroundFor(practice.topic);
+      if (bg) { ctx.background = bg; if (newTopic) readUp = { title: `Background: ${bg.title} (Wikipedia)`, uri: bg.url }; }
+    }
     let used = null;
     let steps = null, liveImages = null;
     if (mode === 'agent') {
@@ -706,6 +746,7 @@ async function send(text, { shown, quizAnswer = false } = {}) {
     const made = Date.now();
     // the card's time must match the time the reply talks about
     const actions = reply.actions?.length ? alignTimes(reply.actions, reply.text, made) : undefined;
+    if (readUp) reply.sources = [...(reply.sources || []), readUp];
     const entry = { role: 'assistant', text: reply.text || (actions ? 'Here you go:' : reply.quiz ? (quizAnswer ? 'Next one:' : 'Here’s your question:') : '…'), sources: reply.sources, memo, actions, made: actions ? made : undefined };
     if (reply.quiz) entry.quiz = reply.quiz;
     if (steps?.length) entry.steps = steps.map(({ label, state }) => ({ label, ok: state !== 'fail' }));
@@ -868,7 +909,7 @@ async function answerQuiz(entry, i) {
 // ---------- documents ----------
 
 function renderDocBar() {
-  const show = !!activeDoc && (practice.mode === 'chat' || (practice.mode === 'quiz' && practice.useDoc));
+  const show = !!activeDoc && (practice.mode === 'chat' || practice.mode === 'quiz');
   $('doc-bar').hidden = !show;
   if (activeDoc) $('doc-name').textContent = `Studying: ${activeDoc.name}`;
 }
@@ -893,11 +934,13 @@ $('doc-file').addEventListener('change', async () => {
     if (practice.mode !== 'chat' && practice.mode !== 'quiz') setMode('chat');
     await useDoc(doc);
     const where = doc.pages > 1 ? ` (${doc.pages} ${/\.pptx$/i.test(doc.name) ? 'slides' : 'pages'})` : '';
-    bubble('assistant', `I've studied "${doc.name}"${where}. Ask me anything about it, or go to Quiz me and tick "From my document" to get quizzed on it.`, { who: current.short, fresh: true });
+    renderDocs();
     const rig = await rigFor(current);
     rig.setMood('happy');
     rig.gesture?.('tada');
-    renderDocs();
+    // in Quiz me, the quiz starts right away from the document
+    if (practice.mode === 'quiz') { send(`Quiz me on my document "${doc.name}". Start with the first question.`, { shown: `Quiz me on ${doc.name}` }); return; }
+    bubble('assistant', `I've studied "${doc.name}"${where}. Ask me anything about it, or switch to Quiz me and say "start" to get quizzed on it.`, { who: current.short, fresh: true });
   } catch (e) {
     console.warn(e);
     notice(e.message || `Couldn't read ${f.name}.`);

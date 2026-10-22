@@ -561,8 +561,6 @@ details.steps .steps-head { cursor: pointer; }
 .doc-x { width: 24px; height: 24px; border: 2px solid var(--ink); border-radius: 6px; background: var(--paper); cursor: pointer; font-weight: 700; line-height: 1; }
 .docs-list li { align-items: center; }
 .docs-list .use { width: auto; padding: 0 8px; font-size: 0.8rem; }
-.usedoc { display: inline-flex; align-items: center; gap: 6px; font-family: var(--text) !important; font-size: 0.92rem !important; font-weight: 700; white-space: nowrap; }
-.usedoc input { width: 18px; height: 18px; flex: none; accent-color: var(--ink); }
 .mode-setup { flex-wrap: wrap; }
 .mode-setup #mode-diff { flex: 0 0 auto; width: auto; }
 

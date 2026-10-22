@@ -86,6 +86,7 @@ export async function ask(character, history, ctx = {}) {
     if (ctx.avoid?.length) body.avoid = ctx.avoid.slice(-40);
   }
   if (ctx.doc) body.doc = ctx.doc;
+  if (ctx.background && ctx.mode === 'quiz') body.background = ctx.background; // facts read up on the quiz topic
   if (ctx.auth) body.auth = ctx.auth;
   if (ctx.calendar) body.calendar = ctx.calendar;
   if (!ctx.mode || ctx.mode === 'chat' || ctx.mode === 'agent') {
