@@ -568,6 +568,35 @@ function notice(text) {
   els.notice.textContent = text || '';
 }
 
+// ---------- new version published? ----------
+// A tab left open keeps running the version it loaded. Every few minutes (and when you come back
+// to the tab) check whether the site has changed; if it has, reload right away when you're not in
+// the middle of something, otherwise offer a Reload button.
+let loadedVersion = null;
+async function siteVersion() {
+  const r = await fetch('js/main.js', { method: 'HEAD', cache: 'no-store' });
+  return r.ok ? r.headers.get('etag') || r.headers.get('last-modified') : null;
+}
+async function checkForUpdate() {
+  try {
+    const v = await siteVersion();
+    if (!v) return;
+    if (loadedVersion === null) { loadedVersion = v; return; }
+    if (v === loadedVersion) return;
+    const idle = !busy && !voice.speaking && !els.input.value.trim() && !document.querySelector('dialog[open]');
+    if (idle && document.visibilityState === 'hidden') { location.reload(); return; }
+    els.notice.hidden = false;
+    els.notice.replaceChildren('Toonlight was just updated. ');
+    const b = Object.assign(document.createElement('button'), { type: 'button', className: 'btn btn-small', textContent: 'Reload' });
+    b.addEventListener('click', () => location.reload());
+    els.notice.append(b);
+  } catch {}
+}
+checkForUpdate();
+setInterval(checkForUpdate, 3 * 60 * 1000);
+document.addEventListener('visibilitychange', checkForUpdate);
+window.addEventListener('focus', checkForUpdate);
+
 const ERRORS = {
   0: "Couldn't reach the AI server. Check your internet connection and try again.",
   429: 'The free AI is busy or out of messages for today. Wait a minute and try again.',
