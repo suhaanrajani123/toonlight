@@ -1,6 +1,6 @@
 # Toonlight
 
-**Practice anything with a 3D character coach.** Pick one of six original characters, then choose what to practice. Everything runs in your browser, and the total cost is **$0**.
+**Practice anything with a 3D character coach.** Pick one of five 3D anime characters, then choose what to practice, or let them work for you as an agent. Everything runs in your browser, and the total cost is **$0**.
 
 | Mode | What happens |
 |---|---|
@@ -44,16 +44,17 @@ The characters also **remember you**: your name, your goals, and facts you share
 ## How it works
 
 ```
-Your browser (Cloudflare Pages, free)              Cloudflare Worker (free)          Google Gemini (free tier)
+Your browser (site on Cloudflare Pages)           Cloudflare Worker (free)          Workers AI (free)
 ┌───────────────────────────────────┐   POST     ┌─────────────────────────┐        ┌──────────────────────┐
-│ Three.js renders the 3D character │  /chat ──► │ adds the personality +  │ ─────► │ writes the reply,    │
-│ Mic → speech recognition (free)   │            │ your secret API key,    │        │ searches Google when │
-│ Reply → voice + lip-sync          │ ◄── reply  │ rate-limits visitors    │ ◄───── │ it needs fresh info  │
+│ Three.js + VRoid characters       │  /chat ──► │ personality + mode      │ ─────► │ Llama 3.3 70B writes │
+│ Mic → speech recognition          │            │ rules, rate limits,     │        │ the reply; FLUX      │
+│ Reply → voice + lip-sync          │ ◄── reply  │ agent tool loop         │ ◄───── │ draws pictures       │
 └───────────────────────────────────┘            └─────────────────────────┘        └──────────────────────┘
+  also from the browser: Supabase (sign-in, saved chats), Google Calendar, Wikipedia (quiz notes)
 ```
 
 - **The characters** are VRoid Studio's free sample models (`docs/models/`, see *The 3D models* below), shrunk with `tools/slim-vrm.py`. The cast bar shows still pictures (`docs/models/portraits/`) so visitors only download a character's model when they pick it. If a model can't load, a simple built-in version made from shapes is shown instead (`docs/js/characters/`).
-- **"Worldwide information"** comes from Gemini's built-in knowledge plus **Google Search grounding**. When a question needs fresh facts, the model searches, and the site shows the sources under the reply. That's why you don't need RAG here.
+- **Fresh information** comes from Agent mode's live tools (web search, Wikipedia, news, weather, maps, exchange rates); the steps and sources show under the reply. Quizzes read up on Wikipedia first; documents are searched in your browser.
 - **Voices** come in two free options. The *Standard* voices are built into your browser. The *HD* voices use Kokoro, an open-source voice model that runs inside the browser after a ~90 MB one-time download.
 - **Moods:** the AI starts each reply with a tag like `[happy]`, and the character's eyebrows, eyes and mouth change to match.
 - **Body language:** characters wave hello, rest a hand on their chin while thinking, talk with their hands while speaking, and shrug, cheer or throw their hands up to match the reply (`docs/js/gestures.js`).
@@ -103,7 +104,7 @@ The AI runs on a free **Cloudflare Worker** using Cloudflare's built-in models (
 ## Free-tier limits, honestly
 
 - Workers AI's free plan includes 10,000 "neurons" a day (roughly a few hundred short chats). It resets at midnight UTC. When it's used up, characters say so until the reset.
-- Workers AI has no live web search, so very recent news may be out of date (adding the optional Gemini key fixes this).
+- Plain chat has no live web search, so very recent news may be out of date; Agent mode looks things up live.
 - Don't type anything private: messages go to the AI provider to be answered.
 - The worker allows 20 messages per minute per visitor, to slow down abuse.
 
