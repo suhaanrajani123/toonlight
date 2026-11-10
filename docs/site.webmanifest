@@ -1,0 +1,14 @@
+{
+  "name": "Toonlight",
+  "short_name": "Toonlight",
+  "description": "Five 3D anime characters you can talk to: chat, quizzes, mock interviews, language practice and an AI agent.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#E7E9EF",
+  "theme_color": "#E7E9EF",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
