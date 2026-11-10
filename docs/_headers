@@ -1,0 +1,17 @@
+# Cloudflare Pages response headers.
+# Security basics for every page, and longer browser caching for the big files that rarely change.
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), geolocation=(), payment=(), microphone=(self)
+
+/models/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=2592000
+
+/vendor/fonts/*
+  Cache-Control: public, max-age=2592000, immutable
+
+/icons/*
+  Cache-Control: public, max-age=604800

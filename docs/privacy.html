@@ -5,19 +5,31 @@
   <script>if (location.hostname.endsWith('github.io')) location.replace('https://toonlight.pages.dev/privacy.html');</script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Toonlight · Privacy</title>
+  <meta name="description" content="What Toonlight stores, what is sent to the AI, and how to delete your data.">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="preload" href="vendor/fonts/mplus2-latin.woff2" as="font" type="font/woff2" crossorigin>
   <style>
-    :root { --ink: #111; --paper: #FBF6EC; --desk: #E9DFCC; --muted: #5a5248; }
-    @media (prefers-color-scheme: dark) { :root { --ink: #F2EDE3; --paper: #1A1A1D; --desk: #0F0F11; --muted: #b9b1a5; } }
-    body { margin: 0; background: var(--desk); color: var(--ink); font: 16px/1.6 system-ui, sans-serif; }
-    main { max-width: 760px; margin: 32px auto; padding: 28px 24px; background: var(--paper); border: 3px solid var(--ink); border-radius: 18px; box-shadow: 6px 6px 0 var(--ink); }
-    @media (max-width: 820px) { main { margin: 16px; } }
-    h1 { margin-top: 0; font-size: 1.8rem; }
-    h2 { font-size: 1.15rem; margin-top: 1.6em; }
-    a { color: inherit; }
-    .muted { color: var(--muted); }
+    @font-face { font-family: 'M PLUS 2'; font-weight: 100 900; font-display: swap; src: url('vendor/fonts/mplus2-latin.woff2') format('woff2'); }
+    :root { --ink: #14161D; --soft: #3B4050; --muted: #667085; --surface: #FFFFFF; --canvas: #E7E9EF; --line: #DFE2E9; --accent: #7A5A1E; color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) { :root { --ink: #ECEEF4; --soft: #C3C8D5; --muted: #8E96A8; --surface: #15181F; --canvas: #0B0D12; --line: #272C38; --accent: #EDB95E; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font: 16px/1.65 'M PLUS 2', system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+    header { max-width: 720px; margin: 0 auto; padding: 22px 24px 0; }
+    .brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 800; font-size: 1.06rem; letter-spacing: -0.02em; color: var(--ink); text-decoration: none; }
+    .brand img { width: 24px; height: 24px; display: block; }
+    main { max-width: 720px; margin: 18px auto 48px; padding: 36px 40px 32px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+    @media (max-width: 760px) { main { margin: 14px 12px 32px; padding: 26px 22px; } header { padding: 16px 20px 0; } }
+    h1 { margin: 0 0 6px; font-size: 2rem; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; }
+    h2 { font-size: 1.08rem; font-weight: 800; letter-spacing: -0.01em; margin: 2em 0 0.4em; }
+    p { margin: 0 0 0.9em; color: var(--soft); }
+    strong { color: var(--ink); }
+    a { color: var(--accent); font-weight: 700; text-underline-offset: 3px; }
+    a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 3px; }
+    .muted { color: var(--muted); font-size: 0.92rem; }
   </style>
 </head>
 <body>
+<header><a class="brand" href="./"><img src="icons/icon.svg" alt="">Toonlight</a></header>
 <main>
   <h1>Toonlight privacy policy</h1>
   <p class="muted">Last updated October 22, 2026. Toonlight is a free, non-commercial student project by Suhaan Rajani.</p>
