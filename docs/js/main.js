@@ -1687,11 +1687,6 @@ document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click'
 }));
 $('close-help').addEventListener('click', () => (els.help.hidden = true));
 
-const clock = $('clock');
-const tick = () => (clock.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
-tick();
-setInterval(tick, 20000);
-
 // browsers only allow sound after the first click or key press
 function unlockAudio() { try { voice.audioContext().resume(); } catch {} }
 addEventListener('pointerdown', unlockAudio, { once: true });

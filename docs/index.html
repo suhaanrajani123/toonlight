@@ -83,20 +83,24 @@
     </defs>
   </svg>
 
-  <!-- menu bar -->
+  <!-- top bar: logo, chats button, the five characters, then Notebook, Help and settings -->
   <header class="menubar">
     <a class="brand" href="#" aria-label="Toonlight home">
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 64 64"><rect class="bm-bg" width="64" height="64" rx="15"/><rect class="bm-lamp" x="17" y="14" width="30" height="7" rx="3.5"/><path class="bm-beam" d="M27.5 25h9L47 51H17z"/></svg></span>
       Toonlight
     </a>
+    <div class="titlebar">
+      <button type="button" class="icon-btn" id="history-toggle" aria-controls="history" aria-expanded="true" aria-label="Hide chats" title="Chats">
+        <svg class="ico"><use href="#i-sidebar"/></svg>
+      </button>
+      <div class="cast" id="cast" role="group" aria-label="Characters"></div>
+      <p class="window-title sr-only" id="window-title" aria-live="polite">Toonlight</p>
+    </div>
     <nav class="menu" aria-label="Main">
-      <button type="button" class="menu-item" data-go="notebook">Notebook</button>
-      <button type="button" class="menu-item" data-go="help">Help</button>
+      <button type="button" class="menu-item" id="open-notebook" title="Notebook"><svg class="ico"><use href="#i-book"/></svg><span>Notebook</span></button>
+      <button type="button" class="menu-item" data-go="help" title="Help"><svg class="ico"><use href="#i-help"/></svg><span>Help</span></button>
     </nav>
     <div class="menu-right">
-      <button type="button" class="icon-btn phone-only" data-go="help" aria-label="Help" title="Help">
-        <svg class="ico"><use href="#i-help"/></svg>
-      </button>
       <button type="button" class="account-btn" id="account-btn" aria-haspopup="dialog">
         <svg class="ico"><use href="#i-user"/></svg><span id="account-label">Sign in</span>
       </button>
@@ -115,26 +119,11 @@
       <button type="button" class="icon-btn" id="voice-toggle" aria-pressed="true" aria-label="Voice on" title="Voice on">
         <svg class="ico"><use href="#i-sound"/></svg>
       </button>
-      <span class="clock" id="clock" aria-hidden="true"></span>
     </div>
   </header>
 
   <main class="desk">
     <section class="window" aria-label="Toonlight app">
-      <div class="titlebar">
-        <div class="title-left">
-          <div class="lights" aria-hidden="true"><span class="l-red"></span><span class="l-yellow"></span><span class="l-green"></span></div>
-          <button type="button" class="icon-btn" id="history-toggle" aria-controls="history" aria-expanded="true" aria-label="Hide chats" title="Chats">
-            <svg class="ico"><use href="#i-sidebar"/></svg>
-          </button>
-          <div class="cast" id="cast" role="group" aria-label="Characters"></div>
-        </div>
-        <p class="window-title sr-only" id="window-title" aria-live="polite">Toonlight</p>
-        <button type="button" class="btn btn-small" id="open-notebook">
-          <svg class="ico"><use href="#i-book"/></svg><span>Notebook</span>
-        </button>
-      </div>
-
       <div class="panes with-history" id="panes">
         <!-- saved chats -->
         <aside class="history" id="history" aria-label="Chats">
