@@ -41,7 +41,8 @@ with sync_playwright() as p:
     asked = []
     pg.on('request', lambda r: asked.append(r.url))
     pg.on('pageerror', lambda e: errors.append(str(e)))
-    pg.on('console', lambda m: m.type == 'error' and errors.append(m.text))
+    # the sandbox has no outside network: ignore its blocked requests (the HD voice library, Supabase)
+    pg.on('console', lambda m: m.type == 'error' and 'ERR_TUNNEL_CONNECTION_FAILED' not in m.text and errors.append(m.text))
     with_api(pg, '')  # demo mode
     pg.goto('http://localhost:8765/')
     pg.wait_for_function('[...document.querySelectorAll("#cast .face")].every(e => e.style.backgroundImage)', timeout=150000)
@@ -96,7 +97,8 @@ with sync_playwright() as p:
     asked = []
     pg.on('request', lambda r: asked.append(r.url))
     pg.on('pageerror', lambda e: errors.append(str(e)))
-    pg.on('console', lambda m: m.type == 'error' and errors.append(m.text))
+    # the sandbox has no outside network: ignore its blocked requests (the HD voice library, Supabase)
+    pg.on('console', lambda m: m.type == 'error' and 'ERR_TUNNEL_CONNECTION_FAILED' not in m.text and errors.append(m.text))
     with_api(pg, 'http://localhost:8787/chat', supabase=True)
     pg.goto('http://localhost:8765/#raven')
     pg.wait_for_timeout(1500)
@@ -260,7 +262,7 @@ with sync_playwright() as p:
     import json as _j
     body = _j.loads(gcal_calls[0][1])
     check(gcal_calls[0][0] == 'POST' and gcal_calls[0][2] == 'Bearer gtok' and body['summary'] == 'Study session' and body['reminders']['overrides'][0]['minutes'] == 10, 'event sent to Google Calendar with your key')
-    check(pg.evaluate("new Date(%s).getHours()" % _j.dumps(body['start']['dateTime'])) == 16 and pg.evaluate("new Date(%s).getDate()" % _j.dumps(body['start']['dateTime'])) == 23, 'event time is 4pm local on the right day')
+    check(pg.evaluate("new Date(%s).getHours()" % _j.dumps(body['start']['dateTime'])) == 16 and pg.evaluate("new Date(%s).getDate()" % _j.dumps(body['start']['dateTime'])) == pg.evaluate('new Date(Date.now() + 86400000).getDate()'), 'event time is 4pm local on the right day')
     check(last.locator('.action a', has_text='Open in Google Calendar').get_attribute('href').endswith('eid=ev1'), 'card links to the new event')
     check(pg.evaluate("JSON.parse(localStorage.getItem('toonlight:gcal')).connected") is True, 'calendar remembered as connected')
     pg.context.grant_permissions(['notifications'])

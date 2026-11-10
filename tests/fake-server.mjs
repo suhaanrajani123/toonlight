@@ -3,6 +3,13 @@ import http from 'node:http';
 import worker from '../worker/worker.js';
 const realFetch = globalThis.fetch;
 let qn = 0;
+// tomorrow's date, so the test event is always in the future
+// (a card for a time that has passed offers no "Add to my Google Calendar" button)
+const tomorrow = () => {
+  const d = new Date(Date.now() + 86400000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 globalThis.fetch = async (url, init) => {
   // fake Supabase: only "good-token" is a real sign-in
   if (String(url).startsWith('https://fake.supabase.co/auth/v1/user')) {
@@ -28,7 +35,7 @@ globalThis.fetch = async (url, init) => {
   if (/MODE: AGENT/.test(sys) && /remind me/i.test(last)) text = `[happy] You got it, tap the button to set it. [action: {"type":"reminder","text":"Finish the math notes","in_minutes":60}]`;
   if (/MODE: AGENT/.test(sys) && /whatsapp/i.test(last)) text = `[neutral] Here's a message ready to go. [action: {"type":"message","app":"whatsapp","to":"Rahul","text":"Hey Rahul, I won't make it to class today."}]`;
   if (/MODE: AGENT/.test(sys) && /amazon/i.test(last)) text = `[happy] Here are some options. [action: {"type":"shop","store":"amazon","query":"logitech wireless mouse"}]`;
-  if (/MODE: AGENT/.test(sys) && /calendar/i.test(last)) text = `[happy] Added below, just confirm it. [action: {"type":"calendar","title":"Study session","start":"2026-10-23T16:00","minutes":90}]`;
+  if (/MODE: AGENT/.test(sys) && /calendar/i.test(last)) text = `[happy] Added below, just confirm it. [action: {"type":"calendar","title":"Study session","start":"${tomorrow()}T16:00","minutes":90}]`;
   return Response.json({ candidates: [{ content: { parts: [{ text }] },
     groundingMetadata: { groundingChunks: [{ web: { uri: 'https://www.nasa.gov/', title: 'nasa.gov' } }] } }] });
 };
