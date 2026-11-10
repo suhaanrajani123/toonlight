@@ -46,7 +46,7 @@ with sync_playwright() as p:
     with_api(pg, '')  # demo mode
     pg.goto('http://localhost:8765/')
     pg.wait_for_function('[...document.querySelectorAll("#cast .face")].every(e => e.style.backgroundImage)', timeout=150000)
-    check(pg.locator('.titlebar #cast .card').count() == 5, 'five character faces in the title bar')
+    check(pg.locator('.titlebar #cast .card').count() == 5, 'five character faces in the top bar')
     check(pg.locator('.cast-group, #cast-panel, #kind').count() == 0 and 'Characters' not in pg.inner_text('.menu') and 'Practice' not in pg.inner_text('.menu'), 'no "Anime crew", no cast column, menu has only Notebook + Help')
     check(pg.locator('#notice').is_visible() and 'Demo mode' in pg.inner_text('#notice'), 'demo-mode notice shown')
     check(pg.inner_text('#name') == 'Kaito Hayabusa', 'starts on Kaito')
@@ -315,7 +315,8 @@ with sync_playwright() as p:
     pg.goto('http://localhost:8765/#elara'); pg.wait_for_timeout(2500)
     w = pg.evaluate('document.documentElement.scrollWidth')
     check(w <= 390, f'no sideways scroll on phone ({w}px)')
-    check(pg.locator('.menu-right .phone-only[data-go="help"]').is_visible() and pg.is_visible('#open-notebook'), 'Help and Notebook reachable on a phone')
+    check(pg.evaluate('document.documentElement.scrollHeight <= innerHeight + 1') and pg.evaluate("document.querySelector('.composer').getBoundingClientRect().bottom <= innerHeight"), 'phone: everything fits the screen, message box at the bottom')
+    check(pg.locator('.menu [data-go="help"]').is_visible() and pg.is_visible('#open-notebook'), 'Help and Notebook reachable on a phone')
     pg.click('#history-toggle'); pg.wait_for_timeout(900)
     box = pg.locator('#history').bounding_box()
     check(box['height'] < 330 and box['x'] == 0 and round(box['y'] + box['height']) >= 840, 'Chats opens as a sheet from the bottom, only as tall as it needs')
