@@ -56,8 +56,8 @@ export class Stage {
 
     // the round platform
     this.platform = new THREE.Group();
-    // a paper "coaster" with an ink rim, to match the notebook look
-    this.platformTop = toon(0xfbf6ec, { rough: 0.85, sheen: 0.2 });
+    // a low studio plinth: pale top, slightly darker edge
+    this.platformTop = toon(0xffffff, { rough: 0.85, sheen: 0.2 });
     this.platform.add(part(cyl(1.12, 1.14, 0.1, 96), this.platformTop, { pos: [0, -0.05, 0] }));
     this.platformRim = toon(0x000000, { rough: 0.6 });
     this.platform.add(part(cyl(1.18, 1.18, 0.12, 96), this.platformRim, { pos: [0, -0.07, 0] }));
@@ -100,9 +100,10 @@ export class Stage {
   }
 
   setTheme(color, dark = false, name = dark ? 'dark' : 'light') {
-    const top = { light: 0xfbf6ec, dark: 0x2a2a2e, black: 0x141414, glass: 0x2b3050 }[name] ?? 0x2a2a2e;
-    this.platformTop.color.set(top).lerp(new THREE.Color(color), dark ? 0.25 : 0.18);
-    this.platformRim.color.set(name === 'glass' ? 0x8a93b8 : dark ? 0xd9d3c7 : 0x000000);
+    const top = { light: 0xffffff, dark: 0x272b36, black: 0x14161b, glass: 0x2b3050 }[name] ?? 0x272b36;
+    const edge = { light: 0xc9cdd8, dark: 0x3d4353, black: 0x2a2e38, glass: 0x8a93b8 }[name] ?? 0x3d4353;
+    this.platformTop.color.set(top).lerp(new THREE.Color(color), dark ? 0.22 : 0.14);
+    this.platformRim.color.set(edge).lerp(new THREE.Color(color), 0.3);
     this.rim.color.set(color).lerp(new THREE.Color(0xffffff), 0.45);
   }
 

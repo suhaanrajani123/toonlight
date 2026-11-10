@@ -138,10 +138,11 @@ function fit(object, height = 2.3) {
   object.position.y -= box.min.y;
 }
 
-export async function loadModel(url) {
+// onProgress(0..1) is called while the file downloads (when the server says how big it is).
+export async function loadModel(url, onProgress) {
   const loader = new GLTFLoader();
   loader.register((parser) => new VRMLoaderPlugin(parser));
-  const gltf = await loader.loadAsync(url);
+  const gltf = await loader.loadAsync(url, onProgress && ((e) => e.lengthComputable && e.total && onProgress(e.loaded / e.total)));
   const vrm = gltf.userData.vrm || null;
   const scene = vrm ? vrm.scene : gltf.scene;
   if (vrm) { VRMUtils.removeUnnecessaryVertices(gltf.scene); VRMUtils.rotateVRM0(vrm); }

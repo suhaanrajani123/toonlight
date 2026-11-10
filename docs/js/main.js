@@ -17,6 +17,7 @@ import { ACCEPT, addDoc, getDoc, listDocs, removeDoc, passagesFor, quizPassage }
 import { letter, parseAnswer, askedBefore, rememberAsked, isRepeat, pickStyle, quizRequest } from './quiz.js';
 import { saveImage, getImage } from './media.js';
 import { oauthProviders, signInWith } from './auth.js';
+import { pieces } from './rich.js';
 import { authConfigured, getSession, signIn, signUp, signOut, resetPassword, setNewPassword, handleRedirect, onAuthChange } from './auth.js';
 
 const $ = (id) => document.getElementById(id);
@@ -64,13 +65,23 @@ practice.topic = practice.mode === 'quiz' ? '' : read(`toonlight:topic:${practic
 
 // ---------- characters & models ----------
 
+const loadProgress = new Map();           // character id → how much of its model has downloaded (0..1)
+function showLoadProgress(c) {
+  if (current?.id !== c.id) return;
+  const f = loadProgress.get(c.id) || 0;
+  els.stage.style.setProperty('--load', f.toFixed(3));
+  els.stage.dataset.loading = f > 0.01 && f < 1 ? `Loading ${c.short}… ${Math.round(f * 100)}%` : `Loading ${c.short}…`;
+}
+
 async function makeRig(c) {
   const own = await getModel(c.id);                 // your model saved in this browser
+  // remembered so the page doesn't pre-download the built-in model when you have your own (index.html)
+  try { own ? localStorage.setItem(`toonlight:own-model:${c.id}`, '1') : localStorage.removeItem(`toonlight:own-model:${c.id}`); } catch {}
   const file = own ? URL.createObjectURL(own.blob) : c.model || c.vrm;
   if (file) {
     try {
       const { loadModel } = await import('./vrm.js');
-      return await loadModel(file);
+      return await loadModel(file, (f) => { loadProgress.set(c.id, f); showLoadProgress(c); });
     } catch (e) {
       console.warn(`Could not load the model for ${c.short}; using the built-in one.`, e);
       if (own) notice(`Your model for ${c.short} couldn't be loaded, so the built-in look is shown.`);
@@ -125,6 +136,7 @@ async function select(id, { keepChat = false } = {}) {
   document.documentElement.style.setProperty('--tint', c.theme.tint);
   stage.setTheme(c.theme.tint, document.documentElement.dataset.theme !== 'light', document.documentElement.dataset.theme);
   els.name.textContent = c.name;
+  $('kana').textContent = c.kana || '';
   els.tagline.textContent = c.tagline;
   els.title.textContent = c.short;
   els.modelWho.textContent = c.short;
@@ -136,12 +148,13 @@ async function select(id, { keepChat = false } = {}) {
   refreshModelStatus();
 
   const loading = setTimeout(() => current === c && els.stage.classList.add('loading'), 250);
-  els.stage.dataset.loading = `Loading ${c.short}…`;
+  showLoadProgress(c);
   const rig = await rigFor(c);
   clearTimeout(loading);
   if (current !== c) return;
   els.stage.classList.remove('loading');
   stage.show(rig);
+  els.stage.dataset.who = c.id; // who is on stage right now
   rig.setMood('happy');
   setTimeout(() => current === c && rig.gesture?.('wave'), 350);
   setTimeout(() => current === c && !busy && rig.setMood('neutral'), 2500);
@@ -480,6 +493,15 @@ function greeting() {
   return memory.name ? `${current.greeting} Good to see you, ${memory.name}!` : current.greeting;
 }
 
+// Turn a reply into text nodes, with web links you can click and **bold** shown as bold.
+function richText(text) {
+  return pieces(text).map((p) => {
+    if (p.link) return Object.assign(document.createElement('a'), { href: p.link, target: '_blank', rel: 'noopener noreferrer', textContent: p.label });
+    if (p.bold) return Object.assign(document.createElement('strong'), { textContent: p.bold });
+    return p.text;
+  });
+}
+
 function bubble(role, text, { sources = [], who, fresh, memo, actions, made, entry } = {}) {
   const li = document.createElement('li');
   li.className = `msg ${role === 'user' ? 'user' : role === 'system' ? 'system' : 'bot'}${fresh ? ' new' : ''}`;
@@ -492,7 +514,8 @@ function bubble(role, text, { sources = [], who, fresh, memo, actions, made, ent
   const b = document.createElement('div');
   b.className = 'bubble';
   const p = document.createElement('p');
-  p.textContent = text; // textContent: replies can never inject HTML
+  if (role === 'user') p.textContent = text;
+  else p.append(...richText(text)); // text nodes, links and bold only: replies can never inject HTML
   b.append(p);
   li.append(b);
   if (role === 'assistant' && text) {
@@ -1581,8 +1604,8 @@ async function listen(btn, text) {
   }
 }
 
-// Themes: light (paper), dark (charcoal), black (true black), glass (frosted panels)
-const THEMES = { light: '#E9DFCC', dark: '#0F0F11', black: '#000000', glass: '#0d1020' };
+// Themes: light (studio white), dark (charcoal), black (true black), glass (frosted panels)
+const THEMES = { light: '#E7E9EF', dark: '#0B0D12', black: '#000000', glass: '#0d1020' };
 function setTheme(theme, { save = true } = {}) {
   if (!THEMES[theme]) theme = 'light';
   document.documentElement.dataset.theme = theme;
