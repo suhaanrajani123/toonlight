@@ -106,3 +106,25 @@ console.log('ok  document search + quiz passages\nall unit tests passed');
   assert.ok(!relevant('photosynthesis', 'Photosystem', 'light reactions'));
   console.log('ok  quiz topic from chat + background matching');
 }
+
+// ---- replies: links and bold, cut into safe pieces ----
+{
+  const { pieces } = await import('../docs/js/rich.js');
+  assert.deepEqual(pieces('plain text'), [{ text: 'plain text' }]);
+  assert.deepEqual(pieces('See **this**: https://www.nasa.gov/moon/.'), [
+    { text: 'See ' }, { bold: 'this' }, { text: ': ' }, { link: 'https://www.nasa.gov/moon/', label: 'nasa.gov/moon' }, { text: '.' },
+  ]);
+  assert.deepEqual(pieces('(https://example.com/a?b=1) done'), [{ text: '(' }, { link: 'https://example.com/a?b=1', label: 'example.com/a?b=1' }, { text: ') done' }]);
+  assert.deepEqual(pieces('2 * 3 * 4 and javascript:alert(1) <b>x</b>'), [{ text: '2 * 3 * 4 and javascript:alert(1) <b>x</b>' }], 'only http(s) links; HTML stays text');
+  assert.deepEqual(pieces(''), []);
+  console.log('ok  links and bold in replies');
+}
+
+// ---- every character has a katakana name for the name plate ----
+{
+  const src = (await import('node:fs')).readFileSync(new URL('../docs/js/roster.js', import.meta.url), 'utf8');
+  const kana = [...src.matchAll(/kana: '([^']+)'/g)].map((m) => m[1]);
+  assert.equal(kana.length, 5);
+  for (const k of kana) assert.match(k, /^[゠-ヿ]+$/, `${k} is katakana only (the bundled font covers that block)`);
+  console.log('ok  katakana names');
+}

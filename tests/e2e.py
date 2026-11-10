@@ -38,8 +38,10 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={'width': 1366, 'height': 800})
     pg.set_default_timeout(90000)  # CPU rendering in CI is slow
     errors = []
+    asked = []
+    pg.on('request', lambda r: asked.append(r.url))
     pg.on('pageerror', lambda e: errors.append(str(e)))
-    pg.on('console', lambda m: m.type == 'error' and 'TUNNEL' not in m.text and errors.append(m.text))  # sandbox blocks Google Fonts
+    pg.on('console', lambda m: m.type == 'error' and errors.append(m.text))
     with_api(pg, '')  # demo mode
     pg.goto('http://localhost:8765/')
     pg.wait_for_function('[...document.querySelectorAll("#cast .face")].every(e => e.style.backgroundImage)', timeout=150000)
@@ -47,6 +49,12 @@ with sync_playwright() as p:
     check(pg.locator('.cast-group, #cast-panel, #kind').count() == 0 and 'Characters' not in pg.inner_text('.menu') and 'Practice' not in pg.inner_text('.menu'), 'no "Anime crew", no cast column, menu has only Notebook + Help')
     check(pg.locator('#notice').is_visible() and 'Demo mode' in pg.inner_text('#notice'), 'demo-mode notice shown')
     check(pg.inner_text('#name') == 'Kaito Hayabusa', 'starts on Kaito')
+    check(pg.inner_text('#kana') == 'カイト・ハヤブサ', 'name plate shows the katakana name')
+    pg.evaluate('document.fonts.ready')
+    check(pg.evaluate('''document.fonts.check("800 16px 'M PLUS 2'") && document.fonts.check("700 12px 'M PLUS 2'", "カイト")'''), 'the typeface (Latin + katakana) loads from the site')
+    check(not any('fonts.googleapis' in u or 'fonts.gstatic' in u for u in asked), 'no request to Google Fonts')
+    check(any(u.endswith('/models/kaito.vrm') for u in asked), "the first character's model starts downloading with the page")
+    check(pg.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'nothing overflows sideways on desktop')
     bgs = pg.eval_on_selector_all('#cast .face', 'els => els.filter(e => /data:image|models\\/portraits\\//.test(e.style.backgroundImage)).length')
     check(bgs == 5, f'portraits rendered ({bgs}/5)')
     pg.screenshot(path=f'{OUT}/01-desktop-demo.png')
@@ -85,8 +93,10 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={'width': 1366, 'height': 800})
     pg.set_default_timeout(90000)  # CPU rendering in CI is slow
     errors = []
+    asked = []
+    pg.on('request', lambda r: asked.append(r.url))
     pg.on('pageerror', lambda e: errors.append(str(e)))
-    pg.on('console', lambda m: m.type == 'error' and 'TUNNEL' not in m.text and errors.append(m.text))  # sandbox blocks Google Fonts
+    pg.on('console', lambda m: m.type == 'error' and errors.append(m.text))
     with_api(pg, 'http://localhost:8787/chat', supabase=True)
     pg.goto('http://localhost:8765/#raven')
     pg.wait_for_timeout(1500)

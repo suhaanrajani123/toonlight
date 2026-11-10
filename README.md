@@ -112,6 +112,7 @@ The AI runs on a free **Cloudflare Worker** using Cloudflare's built-in models (
 
 - **Change a personality:** edit `PERSONAS` in `worker/worker.js`, then redeploy the worker.
 - **Change a voice:** edit `voice` in `docs/js/roster.js`. Standard voices take `pitch` (0–2) and `rate`. HD voices take a Kokoro voice name, such as `af_heart`, `af_bella`, `af_nicole`, `af_sky`, `am_adam`, `am_puck`, `am_fenrir`, `bf_emma`, `bm_george` or `bm_lewis`, plus `speed` and `pitch`.
+- **Change the site's colours or type:** everything is a named value at the top of `docs/css/style.css` (surfaces, text, lines, shadows, corner sizes), once per theme: light, dark, black and glass. The accent colour is each character's `theme.tint` in `docs/js/roster.js`. The typeface is M PLUS 2, served from `docs/vendor/fonts/` (it also draws the katakana names, set with `kana` in the roster).
 - **Change a character's look:** each one is a single file in `docs/js/characters/`. Open `docs/dev/preview.html?c=bloop&mood=happy` to preview one character on its own (try moods `happy`, `sad`, `angry`, `surprised` and `thinking`).
 
 ## The 3D models
@@ -202,7 +203,7 @@ revoke all on public.chats from anon;
 ```
 docs/                  ← the website (Cloudflare Pages serves this folder)
   index.html
-  css/style.css
+  css/style.css        ← the whole look: colour themes, layout, every component
   js/config.js         ← put your worker address here
   js/main.js           ← wires everything together
   js/roster.js         ← the cast: looks, colours, voices, starter questions
@@ -221,7 +222,11 @@ docs/                  ← the website (Cloudflare Pages serves this folder)
   js/vrm.js            ← loads your own .vrm / .glb models
   models/              ← put your model files here
   dev/                 ← preview.html (one character) and model-test.html (loader self-test)
-  vendor/              ← Three.js, three-vrm and pdf.js (open source), included so nothing breaks
+  vendor/              ← Three.js, three-vrm, pdf.js and the M PLUS 2 typeface (open source), included so nothing breaks
+  icons/, share.png    ← site icon, phone icons and the picture shown when the link is shared
+  site.webmanifest     ← lets phones add Toonlight to the home screen
+  _headers             ← Cloudflare Pages: security headers and caching for big files
+  404.html             ← shown for addresses that don't exist
 worker/worker.js       ← the AI server (personalities live here)
 worker/agent.js        ← Agent mode: the tool loop and the tools
 tests/                 ← automated tests (node tests/worker.test.mjs, node tests/units.test.mjs, python3 tests/e2e.py)
