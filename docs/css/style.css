@@ -160,9 +160,11 @@ a { color: inherit; text-underline-offset: 3px; }
 }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 1.06rem; letter-spacing: -0.02em; color: var(--ink); text-decoration: none; }
 .brand-mark svg { width: 24px; height: 24px; display: block; }
-.brand-mark svg rect { fill: var(--tint); }
-.brand-mark svg circle { fill: var(--on-tint); }
-.brand-mark svg path { fill: none; stroke: var(--on-tint); stroke-width: 5; stroke-linecap: round; }
+.brand-mark .bm-bg { fill: var(--ink); }
+.brand-mark .bm-lamp { fill: var(--surface); }
+.brand-mark .bm-beam { fill: var(--tint); transition: fill 0.7s ease; }
+:root[data-theme='glass'] .brand-mark .bm-lamp { fill: #10131F; }
+:root:not([data-theme='light']) .brand-mark .bm-beam { fill: color-mix(in oklab, var(--tint) 62%, #000); }
 .menu { display: flex; gap: 2px; }
 .menu-item {
   background: none; border: 0; border-radius: var(--r-sm); padding: 5px 10px; cursor: pointer;
@@ -170,6 +172,7 @@ a { color: inherit; text-underline-offset: 3px; }
 }
 .menu-item:hover { background: var(--sunken); color: var(--ink); }
 .menu-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.phone-only { display: none; } /* shown where the menu bar's items are hidden */
 .icon-btn { width: 34px; height: 32px; display: grid; place-items: center; background: none; border: 0; border-radius: var(--r-sm); cursor: pointer; color: var(--ink-soft); transition: background-color 0.15s ease, color 0.15s ease; }
 .icon-btn:hover { background: var(--sunken); color: var(--ink); }
 .icon-btn .ico-moon { display: block; } .icon-btn .ico-sun { display: none; }
@@ -245,6 +248,7 @@ a { color: inherit; text-underline-offset: 3px; }
 /* ---------- saved chats ---------- */
 
 .history { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 12px 10px 10px; border-right: 1px solid var(--line); background: var(--raised); }
+.sheet-head { display: none; } /* phones only: the Chats panel is a sheet there */
 .new-chat { justify-content: center; width: 100%; }
 .chat-search { width: 100%; height: 34px; padding: 0 11px; font-size: 0.9rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
 .chat-search:focus { outline: none; border-color: var(--tint-ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tint) 35%, transparent); }
@@ -268,7 +272,7 @@ a { color: inherit; text-underline-offset: 3px; }
 .chat-confirm button { height: 26px; padding: 0 9px; border: 1px solid var(--line-strong); border-radius: 6px; cursor: pointer; background: var(--surface); font-weight: 700; }
 .chat-confirm .yes { background: var(--bad); border-color: var(--bad); color: #fff; }
 :root:not([data-theme='light']) .chat-confirm .yes { color: #1a0605; }
-.chat-empty { margin: 8px 6px; font-size: 0.86rem; color: var(--muted); }
+.chat-empty { margin: 10px 6px 4px; font-size: 0.86rem; line-height: 1.45; color: var(--muted); }
 .history-note { margin: 0 4px; font-size: 0.75rem; color: var(--muted); line-height: 1.4; }
 .history-scrim { display: none; }
 
@@ -618,6 +622,7 @@ code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-si
   body { overflow: auto; }
   .menubar { gap: 10px; padding: 0 12px; position: sticky; top: 0; z-index: 16; }
   .menu { display: none; }
+  .menu-right .phone-only { display: grid; }
   .menu-right { gap: 4px; }
   .account-btn { padding: 0 9px; }
   .account-btn span { display: none; }
@@ -643,7 +648,18 @@ code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-si
   .composer { position: sticky; bottom: 10px; margin: 0 10px 10px; box-shadow: var(--shadow-2); }
   :root[data-theme='glass'] .composer { background: rgba(26, 30, 50, 0.92); }
   .notebook { top: 8px; right: 8px; bottom: 8px; width: calc(100vw - 16px); }
-  .panes .history { position: fixed; top: 52px; bottom: 10px; left: 8px; width: min(300px, calc(100vw - 40px)); border: 1px solid var(--line-strong); border-radius: var(--r-lg); }
+  /* Chats slides up from the bottom, as tall as it needs to be */
+  .panes .history {
+    position: fixed; top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: min(76dvh, 620px);
+    padding: 0 14px calc(14px + env(safe-area-inset-bottom)); gap: 8px;
+    border: 1px solid var(--line-strong); border-bottom: 0; border-radius: 18px 18px 0 0; transform: translateY(102%);
+  }
+  .panes.with-history .history { transform: none; }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; margin: 0 -4px; padding-top: 6px; }
+  .sheet-head h2 { font-size: 1.05rem; }
+  .sheet-head .pop-x { position: static; }
+  .history .chat-list { flex: 0 1 auto; }
+  .history-note { margin-top: 2px; }
   .panes.with-history .history-scrim { position: fixed; }
 }
 @media (max-width: 480px) {

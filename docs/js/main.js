@@ -381,7 +381,7 @@ function renderChatList() {
   if (!chats.length) {
     const p = document.createElement('p');
     p.className = 'chat-empty';
-    p.textContent = q ? 'No chats match that.' : 'Your chats will show up here.';
+    p.textContent = q ? 'No chats match that.' : 'No chats yet. Say something and this one gets saved here.';
     list.append(p);
   }
   $('history-note').textContent = sessionUser
@@ -469,6 +469,7 @@ function setHistoryOpen(open, { save = true } = {}) {
 function closeHistoryOverlay() { if (narrow()) setHistoryOpen(false, { save: false }); }
 $('history-toggle').addEventListener('click', () => setHistoryOpen(!$('panes').classList.contains('with-history')));
 $('history-scrim').addEventListener('click', () => setHistoryOpen(false, { save: false }));
+$('history-close').addEventListener('click', () => setHistoryOpen(false, { save: false }));
 $('new-chat').addEventListener('click', () => { startNewChat(); closeHistoryOverlay(); els.input.focus(); });
 $('new-chat-2').addEventListener('click', () => { startNewChat(); els.input.focus(); });
 $('chat-search').addEventListener('input', renderChatList);
