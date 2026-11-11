@@ -531,6 +531,11 @@ details.steps .steps-head { cursor: pointer; }
 .contact-form .btn { grid-column: 1 / -1; justify-self: start; }
 code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.84em; background: var(--sunken); border-radius: 5px; padding: 1px 5px; }
 
+/* sending a drafted email from its card */
+.mail-send { display: flex; gap: 8px; margin-top: 6px; }
+.mail-to { flex: 1; min-width: 0; height: 34px; padding: 0 10px; font-size: 0.88rem; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-sm); }
+.mail-to:focus { outline: none; border-color: var(--ink-soft); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 12%, transparent); }
+
 /* Google Calendar */
 .gcal-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 10px; }
 .gcal-auto { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 600; margin: 6px 0 10px; }
@@ -567,6 +572,45 @@ code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-si
 
 /* new version banner (main.js) and other small pop-up notes */
 .new-chat-mini { flex: none; }
+
+/* a new reply arrives word by word */
+.msg.new .w { opacity: 0; animation: word 0.28s ease-out var(--d, 0ms) forwards; }
+@keyframes word { to { opacity: 1; } }
+
+.facts .stat { flex: none; font-weight: 700; font-size: 0.82rem; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+
+/* ---------- welcome screen ---------- */
+
+.welcome { display: none; position: fixed; inset: 0; z-index: 40; overflow-y: auto; background: var(--surface); }
+:root.first-visit .welcome { display: block; }
+:root[data-theme='glass'] .welcome { background: #12152a; }
+.welcome-in { max-width: 1040px; margin: 0 auto; padding: 28px 32px 56px; }
+.welcome h1 { margin-top: clamp(40px, 9vh, 96px); max-width: 14ch; font-size: clamp(2.5rem, 7vw, 4.6rem); font-weight: 900; line-height: 0.98; letter-spacing: -0.045em; }
+.welcome-lead { margin: 22px 0 0; max-width: 56ch; font-size: 1.1rem; line-height: 1.6; color: var(--ink-soft); }
+.welcome-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin-top: 28px; }
+.welcome-cta .btn { min-height: 50px; padding: 0 26px; font-size: 1.04rem; border-radius: 12px; }
+.welcome-cta span { font-size: 0.9rem; color: var(--muted); }
+.welcome-cast { list-style: none; margin: clamp(36px, 7vh, 64px) 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.welcome-card {
+  display: grid; justify-items: start; align-content: start; gap: 2px; width: 100%; height: 100%; padding: 14px 14px 16px; text-align: left; cursor: pointer;
+  background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+.welcome-card:hover { border-color: var(--ink-soft); background: var(--surface); transform: translateY(-2px); }
+.welcome-face { width: 64px; height: 64px; margin-bottom: 10px; border-radius: 50%; background: color-mix(in srgb, var(--tint) 30%, var(--surface)) center / cover no-repeat; box-shadow: inset 0 0 0 1px var(--line-strong); }
+.welcome-card strong { font-size: 0.98rem; font-weight: 800; letter-spacing: -0.01em; }
+.welcome-card span:last-child { font-size: 0.84rem; line-height: 1.35; color: var(--muted); }
+.welcome-points { list-style: none; margin: clamp(32px, 6vh, 56px) 0 0; padding: 28px 0 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; font-size: 0.95rem; line-height: 1.55; color: var(--ink-soft); }
+.welcome-points strong { display: block; margin-bottom: 4px; color: var(--ink); font-size: 1.02rem; }
+@media (max-width: 820px) {
+  .welcome-in { padding: 18px 18px 40px; }
+  .welcome h1 { margin-top: 36px; }
+  .welcome-lead { font-size: 1rem; }
+  .welcome-cta .btn { width: 100%; }
+  .welcome-cast { grid-template-columns: 1fr; gap: 8px; }
+  .welcome-card { grid-template-columns: 48px 1fr; align-items: center; gap: 0 12px; padding: 10px 12px; }
+  .welcome-face { grid-row: span 2; width: 48px; height: 48px; margin: 0; }
+  .welcome-points { grid-template-columns: 1fr; gap: 18px; }
+}
 
 /* ---------- Glass theme: frosted panels over a colour wash ---------- */
 

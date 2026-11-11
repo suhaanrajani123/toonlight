@@ -49,6 +49,12 @@
   <link rel="modulepreload" href="vendor/three-vrm/three-vrm.module.min.js">
   <link rel="modulepreload" href="js/vrm.js">
   <script>
+    // first visit (and not a link to a character or a return from signing in): show the welcome screen
+    try {
+      if (!localStorage.getItem('toonlight:welcomed') && !location.hash && !/[?&](code|error)=/.test(location.search)) document.documentElement.classList.add('first-visit');
+    } catch {}
+  </script>
+  <script>
     // the first character's 3D model is the biggest file: fetch it while the code loads
     try {
       const id = /^#(kaito|raven|jun|elara|stella)$/.test(location.hash) ? location.hash.slice(1) : 'kaito';
@@ -250,7 +256,41 @@
         </div>
         <label class="gcal-auto" id="gcal-auto-row" hidden><input type="checkbox" id="gcal-auto"> Add events automatically (you can always Undo)</label>
         <p class="nb-help hand" id="gcal-msg" role="status"></p>
-        <p class="nb-help">Toonlight can only add, change or remove events, and only does it when you ask. Google's sign-in key stays in this browser tab; it's never sent to Toonlight's server.</p>
+        <p class="nb-help">Toonlight reads your upcoming events only when you ask about your schedule, and adds, changes or removes events only when you ask. Google's sign-in key stays in this browser tab; it's never sent to Toonlight's server.</p>
+      </section>
+
+      <section class="nb-section" id="gmail" hidden>
+        <h3>Gmail</h3>
+        <p class="nb-help" id="gmail-state"></p>
+        <div class="gcal-row">
+          <button type="button" class="btn btn-small btn-accent" id="gmail-connect">Connect Gmail</button>
+          <button type="button" class="btn btn-small" id="gmail-disconnect" hidden>Disconnect</button>
+        </div>
+        <p class="nb-help hand" id="gmail-msg" role="status"></p>
+        <p class="nb-help">Toonlight looks at your newest inbox mail only when you ask about email, and never sends anything by itself: a character writes the draft, you press Send. Google's sign-in key stays in this browser tab.</p>
+      </section>
+
+      <section class="nb-section" id="brief">
+        <h3>Your day</h3>
+        <p class="nb-help">One message with today's and tomorrow's calendar, mail worth answering and the weather. Works best with Google Calendar and Gmail connected.</p>
+        <button type="button" class="btn btn-small" id="brief-me">Brief me now</button>
+      </section>
+
+      <section class="nb-section" id="progress">
+        <h3>Quiz progress</h3>
+        <ul class="facts" id="quiz-stats"></ul>
+        <p class="nb-empty hand" id="quiz-stats-empty">No quizzes yet. Pick Quiz me and type a topic.</p>
+      </section>
+
+      <section class="nb-section" id="your-data">
+        <h3>Your data</h3>
+        <p class="nb-help" id="data-state"></p>
+        <div class="gcal-row">
+          <button type="button" class="btn btn-small" id="data-forget">Forget what they remember</button>
+          <button type="button" class="btn btn-small" id="data-docs">Remove my documents</button>
+          <button type="button" class="btn btn-small" id="data-stats">Clear quiz progress</button>
+        </div>
+        <p class="nb-help hand" id="data-msg" role="status"></p>
       </section>
 
       <section class="nb-section" hidden>
@@ -352,6 +392,25 @@
     </ul>
     <p class="nb-help"><a href="privacy.html">Privacy policy</a></p>
     <button type="button" class="btn btn-small" id="close-help">Got it</button>
+  </div>
+
+  <!-- welcome screen: what Toonlight is, for a first visit (the logo brings it back) -->
+  <div class="welcome" id="welcome" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+    <div class="welcome-in">
+      <p class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 64 64"><rect class="bm-bg" width="64" height="64" rx="15"/><rect class="bm-lamp" x="17" y="14" width="30" height="7" rx="3.5"/><path class="bm-beam" d="M27.5 25h9L47 51H17z"/></svg></span>Toonlight</p>
+      <h1 id="welcome-title">Talk to a character, not a chat box.</h1>
+      <p class="welcome-lead">Five 3D anime characters, each with a voice and a personality of their own. They chat, quiz you on your own notes, run mock interviews, practise languages with you, and get real things done as an AI agent.</p>
+      <div class="welcome-cta">
+        <button type="button" class="btn btn-accent" id="welcome-start">Start talking</button>
+        <span>Free. No account needed to chat.</span>
+      </div>
+      <ul class="welcome-cast" id="welcome-cast" aria-label="Pick who to start with"></ul>
+      <ul class="welcome-points">
+        <li><strong>Study.</strong> Type a topic, paste your notes or upload a PDF. They read it first, then quiz you one question at a time.</li>
+        <li><strong>Practise.</strong> Mock interviews with a score on every answer, and conversation practice in ten languages.</li>
+        <li><strong>Get things done.</strong> The Agent researches, checks your Google Calendar, plans your week and drafts emails you approve.</li>
+      </ul>
+    </div>
   </div>
 
   <script type="module" src="js/main.js"></script>

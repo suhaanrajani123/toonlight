@@ -9,6 +9,7 @@
 // portrait → a still picture of the model for the cast bar, so the site doesn't have to
 //   download every model just to draw the buttons (make them with tools/portraits.py).
 // kana → the name in Japanese katakana, shown small above the name on the stage.
+// best → what they're best at, in a few words (shown on the welcome screen).
 //
 // voice.web → the browser's built-in voices (instant, free, quality depends on your OS)
 //   pitch 0–2, rate 0.1–10, gender is a hint for picking a voice.
@@ -24,7 +25,7 @@ import * as stella from './characters/stella.js';
 
 export const ROSTER = [
   {
-    id: 'kaito', name: 'Kaito Hayabusa', kana: 'カイト・ハヤブサ', short: 'Kaito', kind: 'Anime',
+    id: 'kaito', name: 'Kaito Hayabusa', best: 'Goals, fitness and planning', kana: 'カイト・ハヤブサ', short: 'Kaito', kind: 'Anime',
     tagline: 'Cheerful wandering adventurer. Your hype-man for goals, fitness and big plans.',
     greeting: "Hey, I'm Kaito! Whatever you're working toward, I'm happy to help you get there. What's on your mind?",
     build: kaito.build, // used only if the model can't load
@@ -34,7 +35,7 @@ export const ROSTER = [
     prompts: ['Give me a 10-minute workout', 'Plan a weekend trip for me', "I'm losing motivation, help!"],
   },
   {
-    id: 'raven', name: 'Raven Ashford', kana: 'レイヴン・アッシュフォード', short: 'Raven', kind: 'Anime',
+    id: 'raven', name: 'Raven Ashford', best: 'News and straight advice', kana: 'レイヴン・アッシュフォード', short: 'Raven', kind: 'Anime',
     tagline: 'Street-smart night-market rogue. Straight answers, news and real-world advice.',
     greeting: "Hi, I'm Raven. Ask me anything and I'll give you a straight, honest answer.",
     build: raven.build, // used only if the model can't load
@@ -44,7 +45,7 @@ export const ROSTER = [
     prompts: ['How do I spot a scam message?', 'Explain how inflation works', 'Tips for staying safe in a new city'],
   },
   {
-    id: 'jun', name: 'Jun Arata', kana: 'ジュン・アラタ', short: 'Jun', kind: 'Anime',
+    id: 'jun', name: 'Jun Arata', best: 'Coding, gadgets and games', kana: 'ジュン・アラタ', short: 'Jun', kind: 'Anime',
     tagline: 'Laid-back tech kid from the arcade. Coding, gadgets and games.',
     greeting: "Hey! I'm Jun. Coding, computers, gadgets, games, ask away and I'll keep it simple.",
     build: jun.build, // used only if the model can't load
@@ -54,7 +55,7 @@ export const ROSTER = [
     prompts: ['Explain recursion simply', 'Which laptop specs matter for coding?', 'What is an API?'],
   },
   {
-    id: 'elara', name: 'Elara Quinn', kana: 'エララ・クイン', short: 'Elara', kind: 'Anime',
+    id: 'elara', name: 'Elara Quinn', best: 'Study help and life advice', kana: 'エララ・クイン', short: 'Elara', kind: 'Anime',
     tagline: 'Calm city girl. Life advice, study help, food and recipes.',
     greeting: "Hi, I'm Elara. Take a breath and get comfy. What's on your mind today?",
     build: elara.build, // used only if the model can't load
@@ -64,7 +65,7 @@ export const ROSTER = [
     prompts: ['Give me a chicken biryani recipe', 'How do I stop procrastinating?', 'Help me plan a study schedule'],
   },
   {
-    id: 'stella', name: 'Stella Nova', kana: 'ステラ・ノヴァ', short: 'Stella', kind: 'Anime',
+    id: 'stella', name: 'Stella Nova', best: 'Creative ideas and fun', kana: 'ステラ・ノヴァ', short: 'Stella', kind: 'Anime',
     tagline: 'Star-powered hype girl. Jokes, fun facts, music and creative ideas.',
     greeting: "Hi! I'm Stella. Want a fun fact, a creative idea, or help with something? I'm all ears.",
     build: stella.build, // used only if the model can't load

@@ -11,8 +11,9 @@ import { MODES, LANGS, modeById, langCode } from './modes.js';
 import { backgroundFor } from './background.js';
 import { loadMemory, saveMemory, remember, memoryPayload } from './memory.js';
 import { saveModel, getModel, removeModel } from './models.js';
-import { describe, loadContacts, saveContacts, loadReminders, saveReminders, when, alignTimes, eventFor } from './actions.js';
+import { describe, loadContacts, saveContacts, loadReminders, saveReminders, when, alignTimes, eventFor, findContact } from './actions.js';
 import * as gcal from './gcal.js';
+import * as gmail from './gmail.js';
 import { ACCEPT, addDoc, getDoc, listDocs, removeDoc, passagesFor, quizPassage } from './docs.js';
 import { letter, parseAnswer, askedBefore, rememberAsked, isRepeat, pickStyle, quizRequest } from './quiz.js';
 import { saveImage, getImage } from './media.js';
@@ -478,7 +479,7 @@ function greeting() {
   const m = modeById(practice.mode);
   if (practice.mode === 'agent') {
     return signedIn
-      ? `${current.greeting} Agent mode is on. Tell me what you need: I can look things up, check the weather or news, do the math, draw pictures, make files, put reminders and events in your Google Calendar, and get messages ready to send.`
+      ? `${current.greeting} Agent mode is on. Tell me what you need: I can look things up, check the weather or news, do the math, draw pictures, make files, read and add to your Google Calendar, check your Gmail and send what you approve, and get messages ready to send.`
       : `${current.greeting} Agent mode lets me do things for you, like reminders, calendar events and messages. Sign in first to unlock it.`;
   }
   if (practice.mode === 'quiz') {
@@ -495,11 +496,16 @@ function greeting() {
 }
 
 // Turn a reply into text nodes, with web links you can click and **bold** shown as bold.
-function richText(text) {
-  return pieces(text).map((p) => {
-    if (p.link) return Object.assign(document.createElement('a'), { href: p.link, target: '_blank', rel: 'noopener noreferrer', textContent: p.label });
-    if (p.bold) return Object.assign(document.createElement('strong'), { textContent: p.bold });
-    return p.text;
+// With reveal on (a brand-new reply), each word fades in a moment after the one before, so the
+// answer arrives the way speech does. All the text is on the page from the start.
+function richText(text, reveal = false) {
+  let i = 0;
+  const timed = (el) => { el.classList.add('w'); el.style.setProperty('--d', `${Math.min(i++ * 24, 2600)}ms`); return el; };
+  return pieces(text).flatMap((p) => {
+    if (p.link) { const a = Object.assign(document.createElement('a'), { href: p.link, target: '_blank', rel: 'noopener noreferrer', textContent: p.label }); return reveal ? timed(a) : a; }
+    if (p.bold) { const b = Object.assign(document.createElement('strong'), { textContent: p.bold }); return reveal ? timed(b) : b; }
+    if (!reveal) return p.text;
+    return p.text.split(/(\s+)/).map((w) => (/^\s*$/.test(w) ? w : timed(Object.assign(document.createElement('span'), { textContent: w }))));
   });
 }
 
@@ -516,7 +522,7 @@ function bubble(role, text, { sources = [], who, fresh, memo, actions, made, ent
   b.className = 'bubble';
   const p = document.createElement('p');
   if (role === 'user') p.textContent = text;
-  else p.append(...richText(text)); // text nodes, links and bold only: replies can never inject HTML
+  else p.append(...richText(text, fresh && role === 'assistant')); // text nodes, links and bold only: replies can never inject HTML
   b.append(p);
   li.append(b);
   if (role === 'assistant' && text) {
@@ -695,6 +701,7 @@ async function send(text, { shown, quizAnswer = false } = {}) {
     const ctx = { mode, topic: practice.topic, lang: practice.lang, memory: memoryPayload(memory) };
     const cal = gcal.settings();
     if (gcal.available() && cal.connected) ctx.calendar = cal.auto ? 'auto' : 'ask';
+    if (mode === 'agent' || mode === 'chat') ctx.context = await accountContext(text, mode);
     const quizDoc = mode === 'quiz' && practice.useDoc && activeDoc;
     const qKey = quizDoc ? `doc:${activeDoc.id}` : `topic:${practice.topic || 'general'}`;
     let readUp = null;
@@ -913,6 +920,7 @@ async function answerQuiz(entry, i) {
   quizCards.get(entry)?.();
   showScore();
   const ok = i === q.answer;
+  recordQuiz(practice.topic || activeDoc?.name || 'General knowledge', ok);
   const rig = await rigFor(current);
   rig.setMood(ok ? 'happy' : 'sad');
   rig.gesture?.(ok ? 'tada' : 'shrug');
@@ -1142,6 +1150,54 @@ function gestureFor(reply, text) {
 
 // ---------- actions: the card under a reply ----------
 
+// What your connected accounts show right now, in words for the AI: your next days in Google
+// Calendar and the newest mail in your inbox. Only fetched when the message is about your
+// schedule or your email (the Agent always gets the calendar), and only if Google's key is fresh.
+async function accountContext(text, mode) {
+  const notes = [];
+  const brief = /\b(brief me|my day|morning brief)\b/i.test(text);
+  if (gcal.settings().connected && gcal.hasToken() && (mode === 'agent' || gcal.aboutPlans(text))) {
+    try {
+      const from = new Date(); from.setHours(0, 0, 0, 0);
+      const days = /\b(next week|two weeks|this month)\b/i.test(text) ? 14 : 7;
+      notes.push(gcal.eventsNote(await gcal.listEvents(from, new Date(from.getTime() + days * 86400000)), days));
+    } catch {}
+  }
+  if (gmail.settings().connected && gmail.hasToken() && (brief || gmail.aboutMail(text))) {
+    try { notes.push(gmail.inboxNote(await gmail.inbox(6))); } catch {}
+  }
+  return notes.join('\n\n');
+}
+
+// An email a character drafted: with Gmail connected you can send it from the card.
+// It never sends by itself. You read it, fix the address or the words, and press Send.
+function gmailRow(a, card, body, { entry } = {}) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mail-send';
+  const contact = findContact(a.to);
+  const to = Object.assign(document.createElement('input'), { type: 'email', className: 'mail-to', placeholder: 'their@email.com', value: contact?.email || (gmail.validEmail(a.to) ? a.to : '') });
+  to.setAttribute('aria-label', 'Send to (email address)');
+  const btn = Object.assign(document.createElement('button'), { type: 'button', className: 'btn btn-small btn-accent', textContent: 'Send with Gmail' });
+  const status = Object.assign(document.createElement('p'), { className: 'action-note gcal-status' });
+  status.setAttribute('role', 'status');
+  const done = () => { to.disabled = btn.disabled = true; if (body) body.readOnly = true; btn.textContent = 'Sent'; status.textContent = `Sent from your Gmail to ${a.sentTo} ✓`; };
+  btn.addEventListener('click', async () => {
+    if (!gmail.validEmail(to.value)) { status.textContent = 'Type the email address to send it to.'; to.focus(); return; }
+    btn.disabled = true;
+    status.textContent = 'Sending…';
+    try {
+      if (!gmail.hasToken()) await gmail.getToken(); // shows Google's window (needs the click)
+      await gmail.send({ to: to.value.trim(), subject: a.subject || 'Hello', text: body ? body.value : a.text });
+      a.sentTo = to.value.trim();
+      const ch = chat; if (entry && ch.messages.includes(entry)) persist(ch);
+      done();
+    } catch (e) { status.textContent = e.message; btn.disabled = false; }
+  });
+  wrap.append(to, btn);
+  card.querySelector('.action-buttons').before(wrap, status);
+  if (a.sentTo) done();
+}
+
 function actionCard(a, made, opts = {}) {
   const d = describe(a, made || Date.now(), { addReminder, hasReminder: (id) => reminders.some((r) => r.id === id) });
   if (!d) return null;
@@ -1218,6 +1274,7 @@ function actionCard(a, made, opts = {}) {
     n.textContent = d.note;
     card.append(n);
   }
+  if (a.type === 'message' && a.app === 'email' && gmail.available() && gmail.settings().connected) gmailRow(a, card, body, opts);
   return card;
 }
 
@@ -1326,6 +1383,34 @@ $('gcal-connect')?.addEventListener('click', async () => {
 $('gcal-disconnect')?.addEventListener('click', () => { gcal.disconnect(); $('gcal-msg').textContent = 'Disconnected. Events already added stay in your calendar.'; renderCalendar(); });
 $('gcal-auto')?.addEventListener('change', (e) => { gcal.setAuto(e.target.checked); renderCalendar(); });
 gcal.warmUp();
+
+function renderGmail() {
+  const box = $('gmail');
+  if (!box) return;
+  const on = gmail.settings().connected;
+  box.hidden = !gmail.available();
+  $('gmail-state').textContent = on
+    ? 'Connected. In Agent mode, ask about your inbox ("any new email from my professor?") or ask for an email, then send it from the card.'
+    : 'Not connected. Connect it and the Agent can check your inbox and send emails you approve.';
+  $('gmail-connect').hidden = on;
+  $('gmail-disconnect').hidden = !on;
+}
+$('gmail-connect')?.addEventListener('click', async () => {
+  $('gmail-msg').textContent = 'Opening Google…';
+  try { await gmail.connect(); $('gmail-msg').textContent = 'Connected ✓'; } catch (e) { $('gmail-msg').textContent = e.message; }
+  renderGmail();
+});
+$('gmail-disconnect')?.addEventListener('click', () => { gmail.disconnect(); $('gmail-msg').textContent = 'Disconnected.'; renderGmail(); });
+gmail.warmUp();
+renderGmail();
+
+// "Brief me": your day in one message (calendar, inbox if connected, weather if they know your city)
+$('brief-me')?.addEventListener('click', () => {
+  closeNotebook();
+  if (practice.mode !== 'agent') setMode('agent');
+  renewGoogle('brief me');
+  send('Brief me on my day: what is on my calendar today and tomorrow, anything in my inbox I should answer, and the weather.');
+});
 
 // ---------- reminders (work while this site is open in a tab) ----------
 
@@ -1445,18 +1530,25 @@ $('contact-form').addEventListener('submit', (e) => {
   renderContacts();
 });
 
+// Google's keys last about an hour. Renew the one this message needs while you're pressing Send
+// (browsers only allow Google's quick check during a click or key press, and only one at a time).
+function renewGoogle(text) {
+  if (gmail.settings().connected && !gmail.hasToken() && gmail.aboutMail(text)) gmail.renewIfNeeded(text);
+  else gcal.renewIfNeeded(text);
+}
+
 function autoGrow() {
   els.input.style.height = 'auto';
   els.input.style.height = `${Math.min(els.input.scrollHeight + 4, 150)}px`;
 }
 els.form.addEventListener('submit', (e) => {
   e.preventDefault();
-  gcal.renewIfNeeded(els.input.value); // during the click, so Google's quick check isn't blocked
+  renewGoogle(els.input.value); // during the click, so Google's quick check isn't blocked
   send(els.input.value);
 });
 els.input.addEventListener('input', autoGrow);
 els.input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(els.input.value); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); renewGoogle(els.input.value); send(els.input.value); }
 });
 
 // ---------- notebook: memory, voice, models ----------
@@ -1487,8 +1579,97 @@ $('forget-all').addEventListener('click', () => {
   renderMemory();
 });
 
+// ---------- quiz progress and your data ----------
+
+// Every answered question is counted per topic, in this browser: { topic: { right, total, last } }
+const loadStats = () => { try { return JSON.parse(localStorage.getItem('toonlight:quizstats')) || {}; } catch { return {}; } };
+function recordQuiz(topic, ok) {
+  const stats = loadStats();
+  const key = String(topic).trim().slice(0, 80);
+  const s = stats[key] || { right: 0, total: 0 };
+  stats[key] = { right: s.right + (ok ? 1 : 0), total: s.total + 1, last: Date.now() };
+  // keep the 40 most recent topics
+  const kept = Object.fromEntries(Object.entries(stats).sort((a, b) => b[1].last - a[1].last).slice(0, 40));
+  write('toonlight:quizstats', JSON.stringify(kept));
+  renderStats();
+}
+function renderStats() {
+  const list = $('quiz-stats');
+  if (!list) return;
+  const rows = Object.entries(loadStats()).sort((a, b) => b[1].last - a[1].last).slice(0, 12);
+  list.replaceChildren(...rows.map(([topic, s]) => {
+    const li = document.createElement('li');
+    const name = Object.assign(document.createElement('span'), { textContent: topic });
+    const score = Object.assign(document.createElement('strong'), { className: 'stat', textContent: `${s.right}/${s.total} · ${Math.round((s.right / s.total) * 100)}%` });
+    li.append(name, score);
+    return li;
+  }));
+  $('quiz-stats-empty').hidden = rows.length > 0;
+}
+
+async function renderData() {
+  if (!$('data-state')) return;
+  const docs = await listDocs().catch(() => []);
+  const facts = memory.facts.length + (memory.name ? 1 : 0) + (memory.goals ? 1 : 0);
+  const n = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+  $('data-state').textContent = `Kept in this browser: ${n(facts, 'thing', 'things')} the characters remember about you, ${n(docs.length, 'document', 'documents')}, and quiz results for ${n(Object.keys(loadStats()).length, 'topic', 'topics')}. Chats are deleted from the Chats list.`;
+}
+// these can't be undone, so each needs a second press
+function confirmTwice(btn, label, run) {
+  btn.addEventListener('click', async () => {
+    if (btn.dataset.sure) {
+      delete btn.dataset.sure; btn.textContent = label;
+      await run();
+      renderData();
+      return;
+    }
+    btn.dataset.sure = '1'; btn.textContent = 'Press again to confirm';
+    setTimeout(() => { if (btn.dataset.sure) { delete btn.dataset.sure; btn.textContent = label; } }, 4000);
+  });
+}
+confirmTwice($('data-forget'), 'Forget what they remember', () => { $('forget-all').click(); $('data-msg').textContent = 'Forgotten. The characters start fresh.'; });
+confirmTwice($('data-docs'), 'Remove my documents', async () => {
+  for (const d of await listDocs()) await removeDoc(d.id);
+  if (activeDoc) { activeDoc = null; renderDocBar(); }
+  renderDocs();
+  $('data-msg').textContent = 'All documents removed from this browser.';
+});
+confirmTwice($('data-stats'), 'Clear quiz progress', () => { try { localStorage.removeItem('toonlight:quizstats'); } catch {} renderStats(); $('data-msg').textContent = 'Quiz progress cleared.'; });
+renderStats();
+
+// ---------- welcome screen ----------
+
+function closeWelcome(id) {
+  write('toonlight:welcomed', '1');
+  document.documentElement.classList.remove('first-visit');
+  if (id && id !== current?.id) select(id);
+  els.input.focus({ preventScroll: true });
+}
+{
+  const list = $('welcome-cast');
+  for (const c of ROSTER) {
+    const li = document.createElement('li');
+    const b = Object.assign(document.createElement('button'), { type: 'button', className: 'welcome-card' });
+    const face = Object.assign(document.createElement('span'), { className: 'welcome-face' });
+    face.style.backgroundImage = `url(${c.portrait})`;
+    face.style.setProperty('--tint', c.theme?.tint || '');
+    const name = Object.assign(document.createElement('strong'), { textContent: c.name });
+    const best = Object.assign(document.createElement('span'), { textContent: c.best || '' });
+    b.append(face, name, best);
+    b.addEventListener('click', () => closeWelcome(c.id));
+    li.append(b);
+    list.append(li);
+  }
+  $('welcome-start').addEventListener('click', () => closeWelcome());
+  $('welcome').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeWelcome(); });
+  document.querySelector('.menubar .brand').addEventListener('click', (e) => { e.preventDefault(); document.documentElement.classList.add('first-visit'); $('welcome-start').focus(); });
+  if (document.documentElement.classList.contains('first-visit')) $('welcome-start').focus();
+}
+
 let lastFocus = null;
 function openNotebook() {
+  renderData();
+  renderStats();
   lastFocus = document.activeElement;
   els.notebook.inert = false;
   els.notebook.setAttribute('aria-hidden', 'false');
