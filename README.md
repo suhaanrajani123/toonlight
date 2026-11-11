@@ -173,6 +173,17 @@ Setup (already done for toonlight.pages.dev):
 
 Until Google verifies the app, people connecting see "Google hasn't verified this app" and click **Advanced → Go to Toonlight**, and at most 100 people can connect. To remove the warning, submit the app for verification in **Google Auth Platform → Verification center** (free; needs the privacy policy and a short demo video).
 
+## Gmail and calendar reading (free)
+
+The Agent can also **read your upcoming calendar** (same permission as adding events; fetched in the browser and sent to the AI with your message, see `accountContext` in `docs/js/main.js`) and, with Gmail connected in the **Notebook → Gmail**, **check your inbox and send emails you approve** (`docs/js/gmail.js`). Nothing is ever sent by itself: a character drafts, you press **Send with Gmail**.
+
+One-time setup in the Google Cloud console, project *toonlight*:
+
+1. **APIs & Services → Library → Gmail API → Enable**.
+2. **Google Auth Platform → Data access → Add or remove scopes**: add `.../auth/gmail.readonly` and `.../auth/gmail.send`, then Save.
+
+Until Google verifies the app, people see the "Google hasn't verified this app" screen and it is limited to 100 users. `gmail.readonly` is a *restricted* scope: public verification for it needs a yearly security assessment, so for a student project keep it to yourself and friends (or drop reading and keep only sending). The steps and answers for verification are in `google-verification.md`.
+
 ## Sign-in (Supabase, free)
 
 Agent mode needs an account. Toonlight uses [Supabase](https://supabase.com) Auth with email and password:
