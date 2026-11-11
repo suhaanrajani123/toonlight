@@ -18,7 +18,8 @@ globalThis.fetch = async (url, init) => {
   if (String(url).includes('geocoding-api.open-meteo.com')) return Response.json({ results: [{ name: 'Newark', admin1: 'New Jersey', country: 'United States', latitude: 40.7, longitude: -74.2, timezone: 'America/New_York' }] });
   if (String(url).includes('api.open-meteo.com')) return Response.json({ current: { temperature_2m: 18, apparent_temperature: 17, relative_humidity_2m: 60, wind_speed_10m: 10, weather_code: 61 }, daily: { time: ['2026-10-21'], weather_code: [61], temperature_2m_max: [20], temperature_2m_min: [11], precipitation_probability_max: [80] } });
   const body = JSON.parse(init.body);
-  const last = body.contents.at(-1).parts[0].text;
+  // the site may add a block of live account data to the message; the rules below look at the user's own words
+  const last = body.contents.at(-1).parts[0].text.split('\n\n[Live data')[0];
   const who = body.systemInstruction.parts[0].text.match(/You are ([A-Z][\w ]+?)[,.]/)[1];
   const sys = body.systemInstruction.parts[0].text;
   let text = `[surprised] **${who}** here. You asked: "${last}". That's a sharp question, and here's a second sentence so the voice has something to say.`;
@@ -33,6 +34,7 @@ globalThis.fetch = async (url, init) => {
   if (/MODE: AGENT/.test(sys) && /weather/i.test(last)) text = '[tool: {"name":"weather","args":{"place":"Newark, NJ"}}]';
   if (/MODE: AGENT/.test(sys) && /^\[tool results\]/.test(last)) text = `[happy] Rain is likely tomorrow (${/rain chance (\d+)%/.exec(last)?.[1]}%), so take an umbrella. [action: {"type":"file","name":"packing.csv","content":"Item,Why\\nUmbrella,Rain"}]`;
   if (/MODE: AGENT/.test(sys) && /remind me/i.test(last)) text = `[happy] You got it, tap the button to set it. [action: {"type":"reminder","text":"Finish the math notes","in_minutes":60}]`;
+  if (/MODE: AGENT/.test(sys) && /draft a reply/i.test(last)) text = `[happy] Here's a draft, send it when it looks right. [action: {"type":"message","app":"email","to":"lee@njit.edu","subject":"Re: Lab 3 extension","text":"Thank you, Professor Lee. Friday works."}]`;
   if (/MODE: AGENT/.test(sys) && /whatsapp/i.test(last)) text = `[neutral] Here's a message ready to go. [action: {"type":"message","app":"whatsapp","to":"Rahul","text":"Hey Rahul, I won't make it to class today."}]`;
   if (/MODE: AGENT/.test(sys) && /amazon/i.test(last)) text = `[happy] Here are some options. [action: {"type":"shop","store":"amazon","query":"logitech wireless mouse"}]`;
   if (/MODE: AGENT/.test(sys) && /calendar/i.test(last)) text = `[happy] Added below, just confirm it. [action: {"type":"calendar","title":"Study session","start":"${tomorrow()}T16:00","minutes":90}]`;

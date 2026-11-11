@@ -128,3 +128,31 @@ console.log('ok  document search + quiz passages\nall unit tests passed');
   for (const k of kana) assert.match(k, /^[゠-ヿ]+$/, `${k} is katakana only (the bundled font covers that block)`);
   console.log('ok  katakana names');
 }
+
+// ---- Gmail: addresses, raw email, inbox summary ----
+{
+  globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
+  globalThis.sessionStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
+  const g = await import('../docs/js/gmail.js');
+  assert.deepEqual(g.parseFrom('"Maya Lee" <maya@example.com>'), { name: 'Maya Lee', email: 'maya@example.com' });
+  assert.deepEqual(g.parseFrom('solo@example.com'), { name: 'solo@example.com', email: 'solo@example.com' });
+  assert.ok(g.validEmail('a.b@njit.edu') && !g.validEmail('Rahul') && !g.validEmail('a@b') && !g.validEmail('a@b.com, c@d.com'));
+  const raw = g.rawEmail({ to: 'a@b.com', subject: 'Hi\r\nBcc: evil@x.com', text: 'Line 1\nLine 2' });
+  assert.ok(!/^Bcc:/m.test(raw), 'a line break in the subject cannot add a header');
+  assert.ok(raw.startsWith('To: a@b.com\r\nSubject: Hi Bcc: evil@x.com\r\n') && raw.endsWith('\r\n\r\nLine 1\nLine 2'));
+  assert.match(g.rawEmail({ to: 'a@b.com', subject: 'Café ☕', text: '' }), /Subject: =\?UTF-8\?B\?/);
+  assert.ok(g.aboutMail('any new email from my professor?') && !g.aboutMail('what is a stack?'));
+  const note = g.inboxNote([{ from: 'Prof. Lee', email: 'lee@njit.edu', subject: 'Lab 3', snippet: 'Friday is fine', date: new Date(2026, 10, 10), unread: true }]);
+  assert.match(note, /\[unread\] Tue, Nov 10, Prof\. Lee <lee@njit\.edu>: "Lab 3" — Friday is fine/);
+  console.log('ok  gmail helpers');
+}
+
+// ---- calendar reading: your next days in words ----
+{
+  const c = await import('../docs/js/gcal.js');
+  assert.equal(c.eventsNote([], 7), 'Google Calendar, next 7 days: nothing scheduled.');
+  const note = c.eventsNote([{ title: 'CS114 lecture', allDay: false, start: new Date(2026, 10, 12, 10, 0), end: new Date(2026, 10, 12, 11, 20) }, { title: 'Veterans Day', allDay: true, start: new Date(2026, 10, 11), end: new Date(2026, 10, 12) }], 7);
+  assert.match(note, /- Thu, Nov 12, 10:00 AM–11:20 AM: CS114 lecture\n- Wed, Nov 11, all day: Veterans Day/);
+  assert.ok(c.aboutPlans('what do I have on thursday?') && c.aboutPlans('am I free tomorrow') && !c.aboutPlans('explain recursion'));
+  console.log('ok  calendar reading');
+}

@@ -1,4 +1,6 @@
 # End-to-end browser test of the whole site. Needs: docs served on :8765, tests/fake-server.mjs on :8787.
+import base64, datetime
+import json as _json
 import os, sys
 from playwright.sync_api import sync_playwright
 OUT = '/tmp/claude-0/-home-claude/3fe70163-cebc-57b3-9939-d7602cda3cd0/scratchpad/e2e'
@@ -36,6 +38,7 @@ with sync_playwright() as p:
     b = p.chromium.launch(args=ARGS)
     # ---- demo mode, desktop ----
     pg = b.new_page(viewport={'width': 1366, 'height': 800})
+    pg.add_init_script("localStorage.setItem('toonlight:welcomed','1')")  # not a first visit
     pg.set_default_timeout(90000)  # CPU rendering in CI is slow
     errors = []
     asked = []
@@ -92,6 +95,7 @@ with sync_playwright() as p:
 
     # ---- real API path (local worker + fake Gemini) ----
     pg = b.new_page(viewport={'width': 1366, 'height': 800})
+    pg.add_init_script("localStorage.setItem('toonlight:welcomed','1')")  # not a first visit
     pg.set_default_timeout(90000)  # CPU rendering in CI is slow
     errors = []
     asked = []
@@ -167,6 +171,8 @@ with sync_playwright() as p:
     right.click()
     pg.wait_for_selector('#score:not([hidden])', timeout=45000)
     check(pg.inner_text('#score-num') == '1/1' and pg.locator('.quiz-opt.right').count() == 1, 'site grades the answer: 1/1, marked right')
+    stats = pg.evaluate("JSON.parse(localStorage.getItem('toonlight:quizstats') || '{}')")
+    check(len(stats) == 1 and list(stats.values())[0]['right'] == 1 and list(stats.values())[0]['total'] == 1, f'quiz progress is counted per topic ({list(stats.keys())})')
     pg.wait_for_function("document.querySelectorAll('.quiz').length >= 2", timeout=45000); pg.wait_for_timeout(300)
     qs = pg.evaluate("[...document.querySelectorAll('.quiz-q')].map(e => e.textContent)")
     check(len(set(qs)) == len(qs), 'next question arrives and is different')
@@ -246,6 +252,10 @@ with sync_playwright() as p:
         hasGrantedAllScopes: () => true, revoke: (t, cb) => cb && cb() } } };"""))
     def fake_cal(route):
         req = route.request
+        if req.method == 'GET':  # reading the calendar
+            day = datetime.date.today() + datetime.timedelta(days=1)
+            return route.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
+                                 body=_json.dumps({'items': [{'summary': 'CS114 lecture', 'start': {'dateTime': f'{day}T10:00:00'}, 'end': {'dateTime': f'{day}T11:20:00'}}]}))
         gcal_calls.append((req.method, req.post_data, req.headers.get('authorization')))
         if req.method == 'POST':
             return route.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'}, body='{"id":"ev%d","htmlLink":"https://calendar.google.com/calendar/event?eid=ev%d"}' % (len(gcal_calls), len(gcal_calls)))
@@ -270,6 +280,7 @@ with sync_playwright() as p:
     pg.wait_for_function("document.querySelector('.msg.bot:last-of-type .gcal-status')?.textContent.includes('In your Google Calendar')", timeout=10000)
     check(len(gcal_calls) == 2 and _j.loads(gcal_calls[1][1])['reminders']['overrides'][0]['minutes'] == 0, 'reminder added automatically, with a notification at that time')
     check('"calendar":"auto"' in sent_bodies[-1], 'the AI is told events are added automatically')
+    check('Google Calendar, next 7 days' in sent_bodies[-1] and 'CS114 lecture' in sent_bodies[-1] and '10:00' in sent_bodies[-1], 'the Agent is shown what is already in your calendar')
     last.locator('.action button', has_text='Undo').click()
     pg.wait_for_function("document.querySelector('.msg.bot:last-of-type .gcal-status')?.textContent.includes('Removed')", timeout=10000)
     check(gcal_calls[-1][0] == 'DELETE', 'Undo removes it from Google Calendar')
@@ -287,7 +298,30 @@ with sync_playwright() as p:
     check(pg.is_visible('#gcal') and 'Connected' in pg.inner_text('#gcal-state') and pg.is_checked('#gcal-auto'), 'Notebook shows Google Calendar connected, auto-add on')
     pg.click('#gcal-disconnect'); pg.wait_for_timeout(200)
     check(pg.evaluate("JSON.parse(localStorage.getItem('toonlight:gcal')).connected") is False and pg.is_visible('#gcal-connect'), 'Disconnect works')
+    # --- Gmail: read the inbox when asked, send only when you press Send ---
+    mail_sent = []
+    def fake_gmail(route):
+        req = route.request
+        cors = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*'}
+        if req.method == 'OPTIONS': return route.fulfill(status=200, headers=cors)
+        if req.method == 'POST': mail_sent.append(_json.loads(req.post_data)['raw']); return route.fulfill(status=200, content_type='application/json', headers=cors, body='{"id":"s1"}')
+        if '/messages/m1' in req.url:
+            return route.fulfill(status=200, content_type='application/json', headers=cors, body=_json.dumps({'id': 'm1', 'snippet': 'You can hand it in on Friday.', 'internalDate': '1794000000000', 'labelIds': ['INBOX', 'UNREAD'],
+                'payload': {'headers': [{'name': 'From', 'value': 'Prof. Lee <lee@njit.edu>'}, {'name': 'Subject', 'value': 'Lab 3 extension'}]}}))
+        route.fulfill(status=200, content_type='application/json', headers=cors, body='{"messages":[{"id":"m1"}]}')
+    pg.route('https://gmail.googleapis.com/**', fake_gmail)
+    check(pg.is_visible('#gmail') and 'Not connected' in pg.inner_text('#gmail-state'), 'Notebook offers to connect Gmail')
+    pg.click('#gmail-connect'); pg.wait_for_function("document.getElementById('gmail-state').textContent.startsWith('Connected')", timeout=10000)
     pg.click('#close-notebook'); pg.wait_for_timeout(300)
+    last = say('check my email and draft a reply to my professor')
+    check('Gmail inbox' in sent_bodies[-1] and 'Lab 3 extension' in sent_bodies[-1] and 'lee@njit.edu' in sent_bodies[-1], 'the Agent is shown your newest inbox mail when you ask about email')
+    check(last.locator('.mail-to').input_value() == 'lee@njit.edu' and not mail_sent, 'email draft card has the address filled in, and nothing is sent yet')
+    last.locator('.action-body').fill('Thank you, Professor Lee. Friday works for me.')
+    last.locator('button', has_text='Send with Gmail').click()
+    pg.wait_for_function("document.querySelector('.msg.bot:last-of-type .mail-send + .gcal-status')?.textContent.includes('Sent from your Gmail')", timeout=10000)
+    raw = base64.urlsafe_b64decode(mail_sent[0] + '=' * (-len(mail_sent[0]) % 4)).decode()
+    check(len(mail_sent) == 1 and 'To: lee@njit.edu' in raw and 'Subject: Re: Lab 3 extension' in raw and raw.endswith('Friday works for me.'), 'pressing Send sends your edited email through Gmail, once')
+    check(last.locator('button', has_text='Sent').is_disabled(), 'a sent email cannot be sent twice')
     pg.evaluate("(() => { const s = JSON.parse(localStorage.getItem('toonlight:session')); s.access_token = 'forged'; s.expires_at = Date.now() + 3600e3; localStorage.setItem('toonlight:session', JSON.stringify(s)); })()")
     pg.reload(); pg.wait_for_timeout(2500)
     pg.fill('#input', 'remind me in an hour about my math notes'); pg.keyboard.press('Enter')
@@ -301,6 +335,7 @@ with sync_playwright() as p:
 
     # ---- server unreachable ----
     pg = b.new_page(viewport={'width': 1366, 'height': 800})
+    pg.add_init_script("localStorage.setItem('toonlight:welcomed','1')")  # not a first visit
     pg.set_default_timeout(90000)
     with_api(pg, 'http://localhost:9999/chat')
     pg.goto('http://localhost:8765/#jun'); pg.wait_for_timeout(1200)
@@ -312,6 +347,7 @@ with sync_playwright() as p:
 
     # ---- phone ----
     pg = b.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
+    pg.add_init_script("localStorage.setItem('toonlight:welcomed','1')")  # not a first visit
     pg.goto('http://localhost:8765/#elara'); pg.wait_for_timeout(2500)
     w = pg.evaluate('document.documentElement.scrollWidth')
     check(w <= 390, f'no sideways scroll on phone ({w}px)')
@@ -324,6 +360,28 @@ with sync_playwright() as p:
     pg.click('#history-close'); pg.wait_for_timeout(600)
     check('with-history' not in pg.get_attribute('#panes', 'class'), 'the sheet closes again')
     pg.screenshot(path=f'{OUT}/05-phone.png')
+    pg.close()
+
+    # ---- a first visit: the welcome screen, then the Notebook's data controls ----
+    pg = b.new_page(viewport={'width': 1366, 'height': 800})
+    pg.goto('http://localhost:8765/'); pg.wait_for_selector('#welcome-cast .welcome-card >> nth=4', timeout=45000)
+    check(pg.is_visible('#welcome') and pg.is_visible('#welcome-start') and 'Talk to a character' in pg.inner_text('#welcome-title'), 'first visit opens on the welcome screen')
+    pg.screenshot(path=f'{OUT}/06-welcome.png')
+    pg.click('#welcome-cast .welcome-card:has-text("Jun Arata")'); pg.wait_for_timeout(1500)
+    check(not pg.is_visible('#welcome') and pg.inner_text('#name') == 'Jun Arata', 'picking a character there starts with them')
+    pg.reload(); pg.wait_for_timeout(2000)
+    check(not pg.is_visible('#welcome'), 'the welcome screen shows once')
+    pg.click('.menubar .brand'); pg.wait_for_timeout(300)
+    check(pg.is_visible('#welcome'), 'the logo brings the welcome screen back')
+    pg.click('#welcome-start'); pg.wait_for_timeout(300)
+    pg.evaluate("localStorage.setItem('toonlight:quizstats', JSON.stringify({ Stacks: { right: 3, total: 4, last: Date.now() } })); localStorage.setItem('toonlight:memory', JSON.stringify({ name: 'Sam', goals: '', facts: ['Likes tea'] }))")
+    pg.reload(); pg.wait_for_timeout(2000)
+    pg.click('#open-notebook'); pg.wait_for_timeout(600)
+    check('3/4 · 75%' in pg.inner_text('#quiz-stats') and '2 things' in pg.inner_text('#data-state'), f"Notebook shows quiz progress and what is kept ({pg.inner_text('#data-state')[:60]})")
+    pg.click('#data-forget'); pg.wait_for_timeout(200)
+    check('2 things' in pg.inner_text('#data-state') and 'confirm' in pg.inner_text('#data-forget'), 'forgetting needs a second press')
+    pg.click('#data-forget'); pg.wait_for_timeout(500)
+    check('0 things' in pg.inner_text('#data-state'), 'second press forgets what the characters remember')
     pg.close()
     b.close()
 print('\nFAILED:' if fails else '\nALL PASSED', fails or '')
