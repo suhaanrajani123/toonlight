@@ -87,10 +87,11 @@ export function disconnect() {
 }
 
 // Renew the key while you're clicking Send, if this message might lead to a calendar event.
-const PLAN = /\b(remind|reminder|calendar|schedule|meeting|event|appointment|deadline|exam|class|plan|book|tomorrow|tonight|today at|at \d|\d\s*(am|pm)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
+const PLAN = /\b(remind|reminder|calendar|schedule|meeting|event|appointment|deadline|exam|class|plan|book|tomorrow|tonight|today|this week|next week|free|busy|my day|brief me|at \d|\d\s*(am|pm)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
+export const aboutPlans = (text) => PLAN.test(text || '');
 export function renewIfNeeded(text) {
   const s = settings();
-  if (!available() || !s.connected || !s.auto || hasToken() || !PLAN.test(text || '')) return;
+  if (!available() || !s.connected || hasToken() || !PLAN.test(text || '')) return;
   getToken().catch(() => {}); // if it fails, the card offers a button instead
 }
 
@@ -105,6 +106,25 @@ async function call(method, url, body) {
   if (res.status === 403) throw new Error('Google refused. Reconnect Google Calendar in the Notebook and allow calendar access.');
   if (!res.ok && res.status !== 410 && !(method === 'DELETE' && res.status === 404)) throw new Error(`Google Calendar error ${res.status}`);
   return res.status === 204 || method === 'DELETE' ? null : res.json();
+}
+
+// What's already in your calendar between two times: [{ title, start: Date, end: Date, allDay }]
+// (the same permission that lets Toonlight add events also lets it read them)
+export async function listEvents(from, to, max = 30) {
+  const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: String(max) });
+  const r = await call('GET', `${API}?${q}`);
+  return (r.items || []).filter((e) => e.status !== 'cancelled').map((e) => {
+    const allDay = !!e.start?.date;
+    return { title: e.summary || '(no title)', allDay, start: new Date(allDay ? `${e.start.date}T00:00` : e.start?.dateTime), end: new Date(allDay ? `${e.end.date}T00:00` : e.end?.dateTime) };
+  });
+}
+
+// Words for the AI: your next days, one line per event.
+export function eventsNote(events, days) {
+  const day = (d) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const time = (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (!events.length) return `Google Calendar, next ${days} days: nothing scheduled.`;
+  return `Google Calendar, next ${days} days:\n${events.map((e) => `- ${day(e.start)}, ${e.allDay ? 'all day' : `${time(e.start)}–${time(e.end)}`}: ${e.title}`).join('\n')}`;
 }
 
 const pad = (n) => String(n).padStart(2, '0');

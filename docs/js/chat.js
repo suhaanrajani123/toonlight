@@ -76,6 +76,12 @@ export async function ask(character, history, ctx = {}) {
       role, text: actions?.length ? `${text}\n${actions.map((a) => cardNote(a, made)).join('\n')}`.slice(0, 1900) : text,
     })),
   };
+  // live data the site fetched from your own accounts (calendar, inbox) rides along with your latest message
+  if (ctx.context && body.messages.length) {
+    const last = body.messages[body.messages.length - 1];
+    const room = 1950 - last.text.length - 130;
+    if (last.role === 'user' && room > 120) last.text += `\n\n[Live data the site just fetched from the user's own accounts. Use it to answer. Never say you can't see their calendar or inbox.]\n${ctx.context.slice(0, room)}`;
+  }
   if (ctx.mode && ctx.mode !== 'chat') body.mode = ctx.mode;
   if (ctx.topic) body.topic = ctx.topic.slice(0, 120);
   if (ctx.mode === 'language' && ctx.lang) body.lang = ctx.lang;

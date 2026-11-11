@@ -54,7 +54,7 @@ export function extractActions(raw) {
     const close = text.indexOf(']', end);
     text = text.slice(0, m.index) + text.slice(close === -1 ? end + 1 : close + 1);
   }
-  return { text, actions: actions.slice(0, 3) };
+  return { text, actions: actions.slice(0, 6) };
 }
 
 // Keep only known action types and fields, with sane lengths.
